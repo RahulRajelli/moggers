@@ -6,6 +6,7 @@
  * leaves your device" claim stays literally true.
  */
 import { isSignedIn } from "./auth.js";
+import { pathFor } from "./paths.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -37,9 +38,24 @@ function card(m) {
       ${m.gap ? `<span class="match__gap"><b>GAP</b> ${escapeHtml(m.gap)}</span>` : ""}
     </span>`;
 
-  return href
+  const link = href
     ? `<a class="match" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
     : `<div class="match match--nolink">${inner}</div>`;
+
+  /* The path sits OUTSIDE the job link, not inside it. Nesting an <a> in an <a>
+     is invalid and browsers recover from it by closing the outer one early,
+     which would silently break the card's own link. */
+  const path = m.gap ? pathFor(m.gap) : null;
+  if (!path) return link;
+
+  return `${link}
+    <p class="path">
+      <span class="path__label">CLOSE THE GAP · ${escapeHtml(path.label)}</span>
+      ${path.links
+        .map(([title, url]) =>
+          `<a class="path__link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a>`)
+        .join("")}
+    </p>`;
 }
 
 /* The key lives in this browser and nowhere else. It is sent with each match

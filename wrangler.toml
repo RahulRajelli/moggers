@@ -60,6 +60,7 @@ run_worker_first = [
   "/signin.html",
   "/privacy.html",
   "/terms.html",
+  "/resilient.html",
   "/404.html",
 ]
 

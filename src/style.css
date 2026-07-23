@@ -535,6 +535,30 @@ code { font-family: var(--mono); }
 .mogger__ink  { fill: var(--ink); }
 /* Under the ink, so the outlines stay crisp on top of the colour. */
 .mogger__acid { fill: var(--acid); }
+/* Reversed out, for the ink-on-dark explainer section. */
+.mogger__paper { fill: var(--paper); }
+
+/* Card 04: he floats right of the copy rather than sitting above it, so the
+   card keeps the same text rhythm as its three siblings. */
+.card--mogger { overflow: hidden; }
+.card__mogger {
+  float: right; width: 74px; margin: 0 0 0.5rem 0.9rem; max-width: none;
+}
+
+/* ── CLOSE THE GAP ──────────────────────────────────────── */
+/* Sits under its match card, indented so it reads as belonging to it. Quiet by
+   default: the role is the thing being looked at, and this is the follow-up. */
+.path {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 0.7rem;
+  margin: -0.15rem 0 0.7rem; padding: 0.5rem 0.8rem 0.55rem;
+  border-left: 3px solid var(--ink); font-size: 0.72rem;
+}
+.path__label { font-weight: 700; letter-spacing: 0.08em; opacity: 0.55; }
+.path__link {
+  text-decoration: underline; text-decoration-thickness: 2px;
+  text-underline-offset: 3px; text-decoration-color: var(--alert);
+}
+.path__link:hover { background: var(--acid); text-decoration: none; }
 
 /* ── the ranks, shown before anyone has scanned ──────────── */
 .ranks {
@@ -672,6 +696,63 @@ code { font-family: var(--mono); }
 .card__num { font-family: var(--display); font-size: 0.8rem; opacity: 0.5; display: block; margin-bottom: 0.6rem; }
 .card h3 { font-size: 1rem; margin-bottom: 0.6rem; line-height: 1.25; }
 .card p { margin: 0; font-size: 0.82rem; opacity: 0.85; }
+
+/* ── resilient.html ─────────────────────────────────────── */
+.res { max-width: 1180px; margin: 0 auto; padding: 0 clamp(1rem, 4vw, 3rem) clamp(3rem, 6vw, 4.5rem); }
+.res__hero { padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(1.5rem, 3vw, 2.5rem); max-width: 62ch; }
+.res__title {
+  font-size: clamp(2.2rem, 7vw, 4.6rem); line-height: 0.9;
+  text-transform: uppercase; margin-bottom: 1.4rem;
+}
+.res__lede { font-size: clamp(0.9rem, 1.4vw, 1rem); margin: 0 0 1rem; }
+.res__warn {
+  border: var(--rule); border-left-width: 10px; background: var(--paper);
+  padding: 0.85rem 1rem; margin: 1.4rem 0 0; font-size: 0.82rem;
+}
+
+.res__grid {
+  display: grid; gap: 1.1rem;
+  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  margin-top: clamp(1.5rem, 4vw, 2.5rem);
+}
+.track { border: var(--rule); padding: 1.2rem; background: var(--paper); box-shadow: var(--shadow-sm); }
+.track--acid { background: var(--acid); }
+.track__num { font-family: var(--display); font-size: 0.78rem; opacity: 0.45; display: block; margin-bottom: 0.5rem; }
+.track h2 { font-size: 1.05rem; line-height: 1.2; margin-bottom: 0.6rem; }
+.track__why { margin: 0 0 0.8rem; font-size: 0.8rem; opacity: 0.85; }
+.track__links { list-style: none; margin: 0 0 0.8rem; padding: 0; display: grid; gap: 0.4rem; }
+.track__links a {
+  font-size: 0.78rem; font-weight: 700;
+  text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px;
+  text-decoration-color: var(--alert);
+}
+.track__links a:hover { background: var(--ink); color: var(--paper); text-decoration: none; }
+.track__links em { font-style: normal; font-size: 0.72rem; opacity: 0.5; }
+.track__kit { margin: 0; font-size: 0.72rem; opacity: 0.6; border-top: 2px solid var(--ink); padding-top: 0.55rem; }
+
+.res__foot { max-width: 62ch; margin-top: clamp(2.5rem, 6vw, 4rem); }
+.res__footTitle { font-size: clamp(1.4rem, 4vw, 2.2rem); text-transform: uppercase; margin-bottom: 1rem; }
+.res__foot p { font-size: 0.85rem; margin: 0 0 0.9rem; }
+.res__back { font-weight: 700; }
+.bar__name--link { text-decoration: none; }
+
+/* The homepage's route in. Deliberately at the end of the explainer rather than
+   in the nav: it is a detour, and someone who came to check a resume should
+   finish that first. */
+.detour {
+  border-top: var(--rule); background: var(--ink); color: var(--paper);
+  padding: clamp(2rem, 5vw, 3.2rem) clamp(1rem, 4vw, 3rem);
+  display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center; justify-content: space-between;
+}
+.detour__copy { max-width: 54ch; }
+.detour h2 { font-size: clamp(1.3rem, 3.5vw, 2.1rem); text-transform: uppercase; margin-bottom: 0.5rem; }
+.detour p { margin: 0; font-size: 0.82rem; opacity: 0.75; }
+.detour__go {
+  font-family: var(--display); font-size: 0.82rem; letter-spacing: 0.04em;
+  background: var(--acid); color: var(--ink); border: 3px solid var(--acid);
+  padding: 0.75rem 1.1rem; text-decoration: none; white-space: nowrap;
+}
+.detour__go:hover { background: var(--paper); border-color: var(--paper); }
 
 /* ── legal pages ────────────────────────────────────────── */
 .legal {

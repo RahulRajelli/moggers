@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Hand-written on purpose: this site has four public pages. The big SEO play is
+  Hand-written on purpose: this site has a handful of public pages. The big SEO play is
   per-role pages (~5,000 of them), which needs server rendering and a generated
   sitemap — a separate project, not something to fake here with stale entries.
   /signin.html is deliberately absent (it is noindex).
@@ -10,6 +10,11 @@
     <loc>https://moggers.in/</loc>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://moggers.in/resilient</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>
   <url>
     <loc>https://moggers.in/privacy.html</loc>

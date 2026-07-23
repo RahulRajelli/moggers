@@ -11,6 +11,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { escapeHtml, safeUrl } from "../src/jobs.js";
+import { pathFor, PATHS } from "../src/paths.js";
 import { safeEqual, checkRate } from "../worker/security.js";
 import { normalizeLocation, jobHash, hoursAgo,
          REFRESH_AFTER_HOURS, CLOSE_AFTER_HOURS } from "../worker/normalize.js";
@@ -395,5 +396,36 @@ describe("toText", () => {
   it("handles empty input", () => {
     expect(toText("")).toBe("");
     expect(toText(undefined)).toBe("");
+  });
+});
+
+/* The gap→path map is rendered straight into the match card, so a bad URL here
+   is an XSS vector that escaping alone does not close (see safeUrl above), and
+   a mis-ordered pattern silently sends people to the wrong material. */
+describe("gap -> path map", () => {
+  it("matches the specific pattern before the generic one", () => {
+    // "motion planning" must not fall through to a broader planning/ML entry.
+    expect(pathFor("Motion planning experience").label).toBe("Motion planning");
+    expect(pathFor("Needs ROS2 experience").label).toBe("ROS 2");
+    expect(pathFor("Humanoid robot experience").label).toBe("Legged robots");
+    expect(pathFor("No C++ on the resume").label).toBe("C++");
+  });
+
+  it("returns null rather than guessing when nothing fits", () => {
+    expect(pathFor("")).toBeNull();
+    expect(pathFor(null)).toBeNull();
+    expect(pathFor("a strong sense of ownership")).toBeNull();
+  });
+
+  it("every link is https and survives safeUrl", () => {
+    for (const p of PATHS) {
+      expect(p.links.length, p.label).toBeGreaterThan(0);
+      expect(p.links.length, p.label).toBeLessThanOrEqual(3);
+      for (const [title, url] of p.links) {
+        expect(title, url).toBeTruthy();
+        expect(url.startsWith("https://"), url).toBe(true);
+        expect(safeUrl(url), url).toBe(url);
+      }
+    }
   });
 });

@@ -27,6 +27,7 @@ export default defineConfig({
         signin: "signin.html",
         privacy: "privacy.html",
         terms: "terms.html",
+        resilient: "resilient.html",
         notfound: "404.html",
       },
     },
