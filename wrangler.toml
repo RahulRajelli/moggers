@@ -29,6 +29,33 @@ binding = "ASSETS"
 # typo'd URL would render the app and return 200 instead of a real 404.
 not_found_handling = "404-page"
 
+# Static Assets normally serve a matching file WITHOUT invoking the Worker at
+# all — which is why the www -> apex redirect in worker/index.js silently did
+# nothing for page URLs while working fine for /api/* and /auth/* (no file
+# matches those, so the Worker ran).
+#
+# Listing the HTML entry points here makes the Worker run first for them, so the
+# redirect fires. Deliberately NOT "/*": assets (/assets/*, fonts, the sample
+# PDF) keep bypassing the Worker, so this costs one invocation per PAGE view,
+# not per request. Add any new .html page to this list or www will serve a
+# duplicate of it.
+#
+# THE ARRAY IS EXCLUSIVE, NOT ADDITIVE. Anything not listed goes asset-first,
+# and if no asset matches it falls straight to not_found_handling — it does NOT
+# fall through to the Worker. Omitting /api/* and /auth/* 404'd the entire API
+# and sign-in in production while the homepage still looked fine. Both MUST stay
+# in this list.
+run_worker_first = [
+  "/api/*",
+  "/auth/*",
+  "/",
+  "/index.html",
+  "/signin.html",
+  "/privacy.html",
+  "/terms.html",
+  "/404.html",
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "moggers"

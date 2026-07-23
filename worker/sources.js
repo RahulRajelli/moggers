@@ -25,7 +25,10 @@ export const BOARDS = [
   { ats: "greenhouse", token: "anthropic", company: "Anthropic" },
   { ats: "ashby", token: "openai", company: "OpenAI" },
   { ats: "ashby", token: "cohere", company: "Cohere" },
-  { ats: "lever", token: "mistral", company: "Mistral AI" },
+  // Ashby, and the token really does contain a dot — `mistral` on Lever is a
+  // dead board that returns an empty array rather than a 404, so the sweep
+  // reported "0 seen" with no error for weeks. Verified 173 postings.
+  { ats: "ashby", token: "mistral.ai", company: "Mistral AI" },
   { ats: "ashby", token: "character", company: "Character.AI" },
   { ats: "ashby", token: "elevenlabs", company: "ElevenLabs" },
   // ── AI infra / data ──
