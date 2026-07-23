@@ -22,17 +22,23 @@ on:
 # WRITE QUOTA — the reason this sweep is shaped the way it is.
 #
 # D1 free allows 100,000 rows written/day. Before change detection, one full
-# sweep wrote **20,052** (measured 2026-07-23) — only ~13,500 of them jobs rows,
-# the rest FTS5 index rows written by the triggers on every single upsert. At 4
-# runs/day that was ~80,200 plus the Worker cron's own board: about 83% of
-# quota, with no room to add a board.
+# sweep wrote ~20,000 — every row, every run, almost all of it to record that
+# nothing had changed. At 4 runs/day that was ~80,000 plus the Worker cron's own
+# board: roughly 80% of quota, with no room to add a board.
+#
+# Measured on production 2026-07-23: updating ONE jobs row costs 8 rows written.
+# That is index maintenance (jobs carries seven indexes), not the FTS triggers —
+# an earlier note here blamed FTS for the bulk and was wrong.
 #
 # Change detection landed in migrations/0004. Each posting carries an FNV-1a
 # hash of every column the upsert writes (jobHash in worker/normalize.js), and
 # the upsert's WHERE clause skips the row entirely unless the content changed,
 # the posting is being reopened, or its ~20h heartbeat is due. The FTS trigger
-# additionally only fires when title/company/jd actually differ. Verified
-# locally: an unchanged row writes ZERO rows and ZERO index rows.
+# additionally only fires when title/company/jd actually differ.
+#
+# Measured on production: 50 unchanged rows re-upserted wrote 400 the first time
+# (hashes being filled in) and then 0, twice. Expect the ingest to sit near
+# ~19,000 writes/day rather than ~80,000.
 #
 # The first sweep after that migration is the expensive one — jd_hash starts
 # NULL, so every posting counts as changed exactly once.

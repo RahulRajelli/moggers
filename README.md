@@ -181,14 +181,24 @@ can revert to a full sweep. Until then this is the shape.
 
 ### The write quota — read before adding a board (`migrations/0004`)
 
-**D1 free allows 100,000 rows written/day, and the ingest was using 83% of it to
-record that almost nothing had changed.**
+**D1 free allows 100,000 rows written/day, and the ingest was using ~80% of it
+to record that almost nothing had changed.**
 
-One full 19-board sweep wrote **20,052** rows. Only ~13,500 were `jobs` rows;
-the rest came from the FTS5 triggers, which re-indexed every posting on every
-upsert. Four sweeps a day plus the Worker cron's own board left no headroom at
-all — adding a single board would have pushed it over, which is why every
-"more roles" plan was blocked on this.
+Measured on production, 2026-07-23: **updating one `jobs` row costs 8 rows
+written** — 50 rows re-upserted wrote exactly 400. That is index maintenance,
+not the row itself: `jobs` carries seven indexes, and a sweep that touches every
+row pays for all of them. The earlier note in the workflow blaming the FTS5
+triggers for the bulk of it was wrong; the triggers matter, but the row-and-index
+cost dominates.
+
+At 2,346 rows that is ~18,800 per sweep, four sweeps a day, plus the Worker
+cron's own board. No headroom at all — adding a single board would have pushed
+it over, which is why every "more roles" plan was blocked on this.
+
+**After: an unchanged posting writes zero rows.** Same 50 rows, re-run twice
+more with their hashes stored: `rows_written: 0`, then `0` again. The corpus is
+now written once per day by the heartbeat rather than four times, so the ingest
+should sit near **~19,000/day against the 100,000 cap** instead of ~80,000.
 
 Two changes, and they are independent:
 
@@ -241,22 +251,32 @@ The cost: a role pulled from a feed disappears here within about a day rather
 than six hours. For postings that live for weeks, that buys 4× the write
 headroom.
 
-#### Verified locally, with a probe
+#### How this was verified
 
-`rows_written` is not reported by local D1, so the behaviour was proven with a
-counter table and two triggers mirroring the real `WHEN` clause:
+**Locally**, with a counter table and two triggers mirroring the real `WHEN`
+clause — because `wrangler d1 execute --local` does **not** report
+`rows_written`, only `duration`:
 
-| Case | Rows written | Index writes |
+| Case | Row written | Re-indexed |
 |---|---|---|
-| First sweep after the migration (`jd_hash` NULL) | 25 | **0** |
-| Same content again | **0** | **0** |
-| Title changed | 1 | 1 |
-| Closed posting reappears | 1 | 1 (and `active` back to 1) |
-| Heartbeat overdue | 1 | 0 |
+| First sweep after the migration (`jd_hash` NULL) | yes | **no** |
+| Same content again | **no** | **no** |
+| Title changed | yes | yes |
+| Closed posting reappears | yes | yes (and `active` back to 1) |
+| Heartbeat overdue | yes | no |
 
-`INSERT INTO jobs_fts(jobs_fts) VALUES('integrity-check')` passes afterwards —
-worth re-running after anything that touches the triggers, since a corrupt
-external-content index fails silently on reads.
+**On production**, where `--remote` *does* report `rows_written`, by re-upserting
+50 real rows at their own stored values — a genuine no-change sweep:
+400 → 0 → 0.
+
+Afterwards, always:
+
+```bash
+npx wrangler d1 execute moggers --remote -y --command "INSERT INTO jobs_fts(jobs_fts) VALUES('integrity-check')"
+```
+
+A corrupt external-content FTS index does not announce itself — it degrades
+searches silently — so this belongs in any change that touches the triggers.
 
 ### The title filter (`isRelevantTitle` in `worker/sources.js`)
 
