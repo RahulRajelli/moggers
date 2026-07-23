@@ -538,12 +538,25 @@ code { font-family: var(--mono); }
 /* Reversed out, for the ink-on-dark explainer section. */
 .mogger__paper { fill: var(--paper); }
 
-/* Card 04: he floats right of the copy rather than sitting above it, so the
-   card keeps the same text rhythm as its three siblings. */
-.card--mogger { overflow: hidden; }
-.card__mogger {
-  float: right; width: 74px; margin: 0 0 0.5rem 0.9rem; max-width: none;
+/* Card 04. He sits at the BOTTOM, in flow, so the heading starts on the same
+   line as the other three — and so he occupies the dead space the equal-height
+   grid leaves rather than adding to it.
+   `flex: 0 1 auto` + `min-height: 0` is what makes him SHRINK into whatever
+   room is left instead of growing the row and pushing the emptiness into the
+   other cards. */
+/* The reserved strip is padding, not a flow element — the art itself is
+   absolute. In flow he set the row height himself, every card grew 29px, and
+   the dead space he was meant to fill simply reappeared in the other three. */
+/* `.card.card--mogger`, not `.card--mogger`. Both are single-class selectors,
+   so source order decides — and `.card { padding: 1.3rem }` is declared later
+   in this file, which silently ate the reserved strip and let him sit on the
+   text. */
+.card.card--mogger { position: relative; padding-bottom: 7.5rem; }
+.card__art {
+  position: absolute; left: 1.3rem; right: 1.3rem; bottom: 1.1rem;
+  display: flex; justify-content: center; pointer-events: none;
 }
+.card__art .mogger { height: 100px; width: auto; max-width: 100%; }
 
 /* ── interview prep ─────────────────────────────────────── */
 .job__prep {
@@ -799,7 +812,9 @@ code { font-family: var(--mono); }
   padding: clamp(2rem, 5vw, 3.2rem) clamp(1rem, 4vw, 3rem);
   display: grid; gap: 1.4rem clamp(1.5rem, 4vw, 3rem);
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  align-items: center;
+  /* start, not center: the columns are 194px and 129px tall, so centring them
+     offset every line by 33px against the other side and read as a mistake. */
+  align-items: start;
   max-width: 1240px; margin: 0 auto;
 }
 .detour__copy { min-width: 0; }

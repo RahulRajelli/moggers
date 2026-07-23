@@ -318,17 +318,22 @@
            earns its place, so the card stays as text. -->
       <article class="card card--mogger">
         <span class="card__num">04</span>
-        <!-- Second appearance, and it earns it: in the hero he is being
-             scanned, here he is the argument. Reversed out to paper because
-             this section is ink-on-dark — the same two paths, one fill swap. -->
-        <svg class="mogger card__mogger" viewBox="0 0 529 770" aria-hidden="true" focusable="false">
-          <use class="mogger__acid" href="#moggerAcid" />
-          <use class="mogger__paper" href="#moggerInk" />
-        </svg>
         <h3>Nothing filters him out</h3>
+        <!-- Two sentences, not three. The card carries a drawing as well as
+             copy, and the row is only as tall as its longest text — the third
+             sentence bought nothing and cost the space he stands in. -->
         <p>He has survived every extinction event, three recessions and one
-          rebrand. Your resume needs to be about as hard to kill. That is the
-          entire product.</p>
+          rebrand. Your resume needs to be about as hard to kill.</p>
+        <!-- LAST in the DOM, not first. Floated above the heading he pushed it
+             116px down while the other three sat at 53px, which is the whole
+             reason the row looked wrong. Down here he instead fills the ~100px
+             of dead space the equal-height grid leaves in every other card. -->
+        <div class="card__art">
+          <svg class="mogger" viewBox="0 0 529 770" aria-hidden="true" focusable="false">
+            <use class="mogger__acid" href="#moggerAcid" />
+            <use class="mogger__paper" href="#moggerInk" />
+          </svg>
+        </div>
       </article>
     </div>
   </section>
