@@ -730,7 +730,19 @@ code { font-family: var(--mono); }
 .track__links em { font-style: normal; font-size: 0.72rem; opacity: 0.5; }
 .track__kit { margin: 0; font-size: 0.72rem; opacity: 0.6; border-top: 2px solid var(--ink); padding-top: 0.55rem; }
 
-.res__foot { max-width: 62ch; margin-top: clamp(2.5rem, 6vw, 4rem); }
+/* Two columns, because a single 62ch measure left 574px of nothing beside it
+   on a wide screen. */
+.res__foot {
+  margin-top: clamp(2.5rem, 6vw, 4rem);
+  display: grid; gap: 1.5rem clamp(1.5rem, 4vw, 3rem);
+  grid-template-columns: minmax(0, 1fr) auto; align-items: start;
+}
+.res__footCopy { max-width: 62ch; min-width: 0; }
+.plate--foot { max-width: 200px; box-shadow: var(--shadow-sm); justify-self: end; }
+@media (max-width: 760px) {
+  .res__foot { grid-template-columns: 1fr; }
+  .plate--foot { justify-self: start; }
+}
 .res__footTitle { font-size: clamp(1.4rem, 4vw, 2.2rem); text-transform: uppercase; margin-bottom: 1rem; }
 .res__foot p { font-size: 0.85rem; margin: 0 0 0.9rem; }
 .res__back { font-weight: 700; }
@@ -739,20 +751,48 @@ code { font-family: var(--mono); }
 /* The homepage's route in. Deliberately at the end of the explainer rather than
    in the nav: it is a detour, and someone who came to check a resume should
    finish that first. */
+/* Two real columns rather than flex + space-between, which pinned the copy left
+   and the button right and left the middle empty on any wide screen. */
 .detour {
   border-top: var(--rule); background: var(--ink); color: var(--paper);
   padding: clamp(2rem, 5vw, 3.2rem) clamp(1rem, 4vw, 3rem);
-  display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center; justify-content: space-between;
+  display: grid; gap: 1.4rem clamp(1.5rem, 4vw, 3rem);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: center;
+  max-width: 1240px; margin: 0 auto;
 }
-.detour__copy { max-width: 54ch; }
+.detour__copy { min-width: 0; }
 .detour h2 { font-size: clamp(1.3rem, 3.5vw, 2.1rem); text-transform: uppercase; margin-bottom: 0.5rem; }
 .detour p { margin: 0; font-size: 0.82rem; opacity: 0.75; }
+.detour__side { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; min-width: 0; }
+.detour__tracks {
+  display: flex; flex-wrap: wrap; gap: 0.4rem;
+  list-style: none; margin: 0; padding: 0;
+}
+.detour__tracks li {
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; border: 2px solid var(--paper);
+  padding: 0.24rem 0.5rem; opacity: 0.55;
+}
 .detour__go {
   font-family: var(--display); font-size: 0.82rem; letter-spacing: 0.04em;
   background: var(--acid); color: var(--ink); border: 3px solid var(--acid);
   padding: 0.75rem 1.1rem; text-decoration: none; white-space: nowrap;
 }
 .detour__go:hover { background: var(--paper); border-color: var(--paper); }
+
+@media (max-width: 760px) {
+  .detour { grid-template-columns: 1fr; }
+}
+
+/* ── nav ────────────────────────────────────────────────── */
+.bar__nav {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; text-decoration: none; white-space: nowrap;
+  border-bottom: 2px solid transparent; padding-bottom: 1px; opacity: 0.75;
+}
+.bar__nav:hover { opacity: 1; border-bottom-color: var(--acid); }
+.bar__nav[aria-current="page"] { opacity: 1; border-bottom-color: var(--acid); }
 
 /* ── legal pages ────────────────────────────────────────── */
 .legal {
