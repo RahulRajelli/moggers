@@ -86,6 +86,30 @@ export function safeUrl(raw) {
   }
 }
 
+/* The empty state, which is where THE MOGGER lives.
+ *
+ * "No roles match that" is accurate and tells you nothing. Naming the two
+ * things actually worth trying — widen the filters, or switch to meaning —
+ * turns a dead end into the next action, and the semantic hint matters because
+ * nobody writes a job description in the words a candidate would search for. */
+function emptyState() {
+  const semantic = el.semantic?.checked;
+  return `
+    <div class="nothing">
+      <svg class="mogger nothing__mogger" viewBox="0 0 240 320" role="img"
+           aria-label="Line drawing of a cockroach wearing a tie">
+        <g class="mogger__ink"><use href="#mogger" /></g>
+        <g class="mogger__tie"><use href="#moggerTie" /></g>
+      </svg>
+      <p class="nothing__head">Nothing survived that filter</p>
+      <p class="nothing__sub">${
+        semantic
+          ? "And that was a search by meaning, so it is not a wording problem — widen the filters."
+          : "Try widening it, or tick <b>Meaning</b> — nobody writes a job ad in the words you would search for."
+      }</p>
+    </div>`;
+}
+
 function card(j) {
   const tags = [
     j.remote ? `<span class="jtag jtag--remote">REMOTE</span>` : "",
@@ -140,7 +164,7 @@ async function load({ append = false } = {}) {
   const html = (data.jobs || []).map(card).join("");
 
   if (append) el.list.insertAdjacentHTML("beforeend", html);
-  else el.list.innerHTML = html || `<p class="joblist__msg">No roles match that. Try widening the filters.</p>`;
+  else el.list.innerHTML = html || emptyState();
 
   offset += (data.jobs || []).length;
   el.more.hidden = offset >= total || !(data.jobs || []).length;

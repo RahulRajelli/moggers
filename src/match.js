@@ -107,7 +107,21 @@ async function run() {
       return;
     }
     if (!data.matches?.length) {
-      out.innerHTML = `<p class="matchout__msg">No close roles found. Try including more of your skills.</p>`;
+      /* Worth being precise rather than encouraging: retrieval here is by
+         MEANING, so an empty result is not a keyword problem and telling
+         someone to add keywords would send them off to do useless work. */
+      out.innerHTML = `
+        <div class="nothing">
+          <svg class="mogger nothing__mogger" viewBox="0 0 240 320" role="img"
+               aria-label="Line drawing of a cockroach wearing a tie">
+            <g class="mogger__ink"><use href="#mogger" /></g>
+            <g class="mogger__tie"><use href="#moggerTie" /></g>
+          </svg>
+          <p class="nothing__head">Nothing close enough to show you</p>
+          <p class="nothing__sub">This matched on meaning, not keywords — so adding
+            buzzwords will not help. Either the board has nothing in your field yet,
+            or the resume text is too short to characterise.</p>
+        </div>`;
       return;
     }
 

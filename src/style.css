@@ -206,7 +206,18 @@ code { font-family: var(--mono); }
   font-family: var(--mono); font-size: 0.74rem; padding: 0.55rem 0.7rem; cursor: pointer;
 }
 .resultbar__reset:hover { background: var(--ink); color: var(--paper); }
-.resultbar__match:focus-visible, .resultbar__reset:focus-visible {
+/* Secondary to MATCH: sharing is the growth loop, but matching is what the
+   visitor came for. Ink-on-paper rather than acid so the two do not compete. */
+.resultbar__share {
+  border: 2px solid var(--ink); background: var(--ink); color: var(--paper);
+  font-family: var(--mono); font-weight: 700; font-size: 0.74rem;
+  letter-spacing: 0.06em; padding: 0.55rem 0.7rem; cursor: pointer;
+}
+.resultbar__share:hover:not(:disabled) { background: var(--acid); color: var(--ink); }
+.resultbar__share:disabled { opacity: 0.6; cursor: progress; }
+.resultbar__match:focus-visible,
+.resultbar__reset:focus-visible,
+.resultbar__share:focus-visible {
   outline: 3px solid var(--alert); outline-offset: 2px;
 }
 
@@ -492,6 +503,41 @@ code { font-family: var(--mono); }
 .jtag--remote { background: var(--ink); color: var(--paper); }
 .jtag--muted { border-color: transparent; opacity: 0.5; font-weight: 400; }
 .jtag--new { background: var(--acid); }
+
+/* ── THE MOGGER ─────────────────────────────────────────── */
+/* Holds the <defs> only. Zero-sized rather than display:none, because a
+   display:none <svg> in Safari has historically stopped <use> resolving. */
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+.mogger { display: block; width: 100%; max-width: 150px; aspect-ratio: 3 / 4; margin: 0 auto; }
+/* Same weights as .specimen__ink — visible edges heavy, construction light. */
+.mogger__ink { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.mogger__ink .cx { stroke-width: 0.7; opacity: 0.3; }
+/* The one hit of colour on him, and the whole gag. */
+.mogger__tie { fill: var(--acid); stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
+
+/* Empty states: he is the thing you get instead of results. */
+.nothing { text-align: center; padding: 2rem 1rem 2.5rem; }
+.nothing__mogger { max-width: 116px; opacity: 0.85; }
+.nothing__head {
+  font-family: var(--display); font-size: 1rem; letter-spacing: 0.04em;
+  margin: 0.9rem 0 0.3rem; text-transform: uppercase;
+}
+.nothing__sub { margin: 0; font-size: 0.8rem; opacity: 0.6; max-width: 42ch; margin-inline: auto; }
+
+/* 404: he is the page's only illustration, framed like THE SPECIMEN so the two
+   drawings read as the same hand. */
+.specimen404 {
+  margin: 2rem 0; border: var(--rule); background: var(--paper);
+  box-shadow: var(--shadow-sm); max-width: 260px;
+}
+.specimen404 .mogger { padding: 1.2rem 1rem 0.6rem; max-width: 200px; }
+.specimen404 figcaption {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 0.75rem; flex-wrap: wrap;
+  border-top: var(--rule); padding: 0.5rem 0.75rem;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.14em;
+}
 
 /* ── the watcher ────────────────────────────────────────── */
 .watch { margin-bottom: 1.2rem; }

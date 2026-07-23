@@ -125,6 +125,9 @@
 
     <div class="resultbar">
       <button type="button" id="matchFromScan" class="resultbar__match">MATCH THIS RESUME TO LIVE ROLES →</button>
+      <!-- Drawn on a canvas in this browser. Carries the SCORE and the ligature
+           glyphs, never a word of the resume — so posting it cannot leak a CV. -->
+      <button type="button" id="scanShare" class="resultbar__share">↓ SHARE THE VERDICT</button>
       <button type="button" id="scanReset" class="resultbar__reset">✕ scan a different PDF</button>
     </div>
 
@@ -273,6 +276,56 @@
   </span>
   <span>no upload · no tracking</span>
 </footer>
+
+<!-- ── THE MOGGER ────────────────────────────────────────────
+     Defined once, drawn wherever an empty state needs a face. Same drafting
+     language as THE SPECIMEN above — orthographic, fill:none, visible edges
+     heavy and construction lines light — so the joke sits inside the design
+     system rather than beside it.
+
+     Deliberately NOT three.js. Removing WebGL from this page deleted a 130 kB
+     gzipped chunk; a mascot is exactly the kind of decoration that would invite
+     it back. This is ~2 kB of markup with no GPU, no loader and no async
+     failure path. The 3D version of him belongs in the render pipeline for the
+     launch video, where bytes on this page are not a cost. -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <defs>
+    <g id="mogger">
+      <!-- antennae: the only free curves on him, so he reads as alive -->
+      <path d="M108 36 C92 14 62 2 26 8" />
+      <path d="M132 36 C148 14 178 2 214 8" />
+      <!-- head, small and tucked under the shield — a rounder one read as a
+           ladybird, which is the wrong insect and the wrong joke -->
+      <path d="M120 30 C107 30 101 37 101 45 C101 53 109 58 120 58 C131 58 139 53 139 45 C139 37 133 30 120 30 Z" />
+      <ellipse cx="109" cy="43" rx="3.4" ry="4.6" />
+      <ellipse cx="131" cy="43" rx="3.4" ry="4.6" />
+      <!-- pronotum: the shield he wears to the office -->
+      <path d="M120 52 C86 52 62 66 62 86 C62 100 88 106 120 106 C152 106 178 100 178 86 C178 66 154 52 120 52 Z" />
+      <!-- wings: tapered and overlapping. THIS is the silhouette that makes him
+           a cockroach rather than a beetle — a rounded abdomen does not. -->
+      <path d="M119 100 C86 102 56 132 56 178 C56 232 86 288 119 300" />
+      <path d="M121 100 C154 102 184 132 184 178 C184 232 154 288 121 300" />
+      <path class="cx" d="M120 104 V298" />
+      <path class="cx" d="M128 106 C136 160 134 246 122 296" />
+      <path class="cx" d="M96 140 C82 176 80 224 92 262" />
+      <!-- six legs, three segments each so they read spiny against the curves -->
+      <path d="M66 72 L28 48 L10 50 L4 58" />
+      <path d="M64 94 L18 88 L2 98 L4 108" />
+      <path d="M72 118 L32 146 L20 170 L24 182" />
+      <path d="M174 72 L212 48 L230 50 L236 58" />
+      <path d="M176 94 L222 88 L238 98 L236 108" />
+      <path d="M168 118 L208 146 L220 170 L216 182" />
+      <!-- cerci -->
+      <path d="M108 292 L96 316 M132 292 L144 316" />
+    </g>
+    <!-- The tie is its own group so it can carry the one hit of colour. -->
+    <g id="moggerTie">
+      <path d="M112 54 L120 66 L128 54" />
+      <path d="M120 66 L111 78 L120 90 L129 78 Z" />
+      <path d="M120 90 L107 168 L120 196 L133 168 Z" />
+    </g>
+  </defs>
+</svg>
 
 <script type="module" src="/src/main.js"></script>
 </body>

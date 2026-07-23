@@ -110,6 +110,9 @@ function runChecks(text, pageCount) {
 
   // 2 — ligatures (the headline check)
   const found = [...new Set(text.match(LIG_RX) || [])];
+  /* Held for the share card. The GLYPHS only — never the words containing
+     them, which would put resume text on an image meant to be posted. */
+  lastScanLigatures = found;
   if (found.length) {
     const words = [...new Set(
       text.split(/\s+/)
@@ -228,6 +231,13 @@ function renderChecks(checks) {
     .join("");
 }
 
+/* What the share card renders. Kept as a plain object built here rather than
+   scraped back out of the DOM, so the card and the page can never disagree
+   about the verdict — and so it is obvious at a glance that NOTHING from the
+   resume text is in it. */
+let lastVerdict = null;
+let lastScanLigatures = [];
+
 function renderVerdict(checks) {
   const passed = checks.filter((c) => c.state === "pass").length;
   const failed = checks.filter((c) => c.state === "fail").length;
@@ -245,6 +255,23 @@ function renderVerdict(checks) {
     : passed === checks.length
     ? "Every keyword on this resume is machine-readable. Now go make the content worth reading."
     : "Nothing is silently broken, but the warnings below cost you reach.";
+
+  /* Assembled for the share card. Counts and verdict only — plus the ligature
+     GLYPHS, which are characters rather than any word from the document. */
+  const ligCheck = checks[1];
+  const ligatures = ligCheck?.state === "fail"
+    ? parseInt(ligCheck.title, 10) || 0
+    : 0;
+  lastVerdict = {
+    passed,
+    total: checks.length,
+    failed,
+    title: $("verdictTitle").textContent,
+    ligatures,
+    worst: ligatures
+      ? [...new Set(lastScanLigatures)].slice(0, 6).join("  ")
+      : checks.find((c) => c.state === "fail")?.title || "",
+  };
 }
 
 function renderLayer(text, pageCount) {
@@ -318,6 +345,11 @@ async function handleFile(file) {
 function resetScan() {
   fileInput.value = "";
   lastScanText = "";
+  /* Clear the card's source too. The button is inside the hidden results
+     section so it cannot be pressed, but leaving the previous scan's verdict
+     in memory means a stale card is one bug away from being shareable. */
+  lastVerdict = null;
+  lastScanLigatures = [];
   results.hidden = true;
   $("checks").innerHTML = "";
   $("layer").innerHTML = "";
@@ -329,6 +361,27 @@ function resetScan() {
 }
 
 $("scanReset").addEventListener("click", resetScan);
+
+/* Lazily imported: the card is drawn once, by one person, after a scan — there
+   is no reason for its canvas code to be in the critical path. */
+$("scanShare").addEventListener("click", async (e) => {
+  if (!lastVerdict) return;
+  const btn = e.currentTarget;
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "DRAWING…";
+  try {
+    const { shareCard } = await import("./share.js");
+    const how = await shareCard(lastVerdict);
+    btn.textContent = how === "downloaded" ? "✓ SAVED AS PNG" : label;
+  } catch (err) {
+    console.error("share card failed", err);
+    btn.textContent = "COULDN'T MAKE THE CARD";
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = label; }, 3000);
+  }
+});
 
 /* Hand the scanned text to the matcher and scroll there. Deliberately does NOT
    send: the X-Ray section promises nothing leaves the device, so the one click

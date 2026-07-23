@@ -620,6 +620,57 @@ check that proved this build: create a watch (expect `fresh: []` and a non-zero
 (expect exactly that row), check again (expect **no** repeat), `ack`, check
 again (expect nothing).
 
+## THE MOGGER (inline SVG, `index.html` + `404.html`)
+
+A cockroach in a tie, in the same orthographic drafting language as THE
+SPECIMEN — fill:none, visible edges at 1.8, construction lines at 0.7. He is
+what you get instead of results: the job list's empty state, the matcher's
+no-match state, and the 404.
+
+**Not three.js, and not by accident.** Removing WebGL from this page deleted a
+130 kB gzipped chunk, and a mascot is exactly the kind of decoration that
+invites it back. He is ~2 kB of markup with no GPU, no loader, no async chunk
+and no silent-failure path. The 3D version belongs in the Remotion launch
+video, where bytes on this page are not a cost.
+
+Two things that were got wrong first and are worth keeping right:
+
+- **The silhouette is the whole illusion.** A rounded abdomen reads as a beetle
+  or a ladybird. Cockroach-ness comes from *tapered, overlapping wings* running
+  past the body and a small head tucked under a broad pronotum.
+- **The sprite is `<defs>` in a zero-sized `<svg>`, not `display:none`.** A
+  `display:none` SVG has historically stopped `<use>` resolving in Safari.
+  `404.html` carries its own copy — it is a separate document and cannot `<use>`
+  index.html's.
+
+## The share card (`src/share.js`)
+
+A 1200×630 PNG of the verdict, drawn on a `<canvas>` in the visitor's browser,
+handed to `navigator.share` on a phone or downloaded on desktop.
+
+**It does not weaken the privacy claim, and that constrains its content:**
+
+- No upload, no render service, no third-party image API — `connect-src 'self'`
+  would refuse one anyway, which is the point of having the policy.
+- **Nothing from the resume is on it.** Counts, the verdict headline, and the
+  ligature *glyphs* (`ﬁ ﬂ ﬀ` — characters, not words). Never the extracted
+  text, the name, or the contact details. Someone posting this cannot leak
+  their own CV, which they certainly would if the card carried the text layer.
+  `lastVerdict` in `src/main.js` is assembled explicitly rather than scraped
+  back out of the DOM, so what goes on the card is legible in one place.
+
+Three implementation notes:
+
+- **Wait for `document.fonts.ready`.** Canvas silently substitutes a font that
+  has not loaded, and the card comes out in Times with no error anywhere.
+- **`navigator.share` throws `AbortError` when the user dismisses the sheet.**
+  That is not a failure; it is caught by name rather than with a blanket catch
+  that would also swallow real ones.
+- **Revoke the blob URL on the next frame, not immediately.** Safari cancels
+  the download if it is freed synchronously after `click()`.
+
+Lazily imported (2.8 kB): the card is drawn once, by one person, after a scan.
+
 ## Sample fixture
 
 `public/sample/broken-resume.pdf` is a synthetic resume rendered through Edge
