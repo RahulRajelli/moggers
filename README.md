@@ -242,6 +242,47 @@ Triggers keep `jobs_fts` in sync. External-content FTS tables are not
 auto-populated, and `'delete'` rows must carry the OLD values or the index
 corrupts silently.
 
+## Semantic search (`worker/embed.js`)
+
+Workers AI `@cf/baai/bge-small-en-v1.5` (384 dims — same family as the local Job
+Tracker's fastembed/BGE-small) + a Vectorize index `moggers-jobs`. Opt-in per
+request via `?mode=semantic`, surfaced as the **Meaning** toggle.
+
+It finds what FTS structurally cannot, because nobody writes a job description
+in the words a candidate would use:
+
+| Query | Keyword | Semantic |
+|---|---|---|
+| "making robots walk" | **0** | Robot Behaviors, Navigation (Agility) |
+| "teaching machines to grasp objects" | **0** | Helix AI Engineer, Whole Body Control (Figure) |
+| "legged locomotion" | **0** | RL Engineer – Whole Body Control |
+
+### Three platform limits that shaped this file
+
+- **50 subrequests per invocation (free).** One embed call per job is
+  impossible for 2,000+ rows. `bge` accepts an ARRAY of texts, so `embedBatch()`
+  does 50 per call — ~43 calls for the whole corpus. **Never rewrite this to
+  embed one row per call.**
+- **`returnMetadata` is a STRING enum** (`"none" | "indexed" | "all"`), not a
+  boolean. Passing `false` fails the body parse with `VECTOR_QUERY_ERROR 40026`.
+  `returnValues` really is a boolean.
+- **Vectorize caps `topK` at 100** — asking for more errors with `40011`, it does
+  not clamp. This is the real ceiling on combining semantic search with filters:
+  ranking happens first, so `country=India` may leave few of the 100 survivors.
+  FTS has no such limit, which is why it stays the default.
+
+Vectorize stores **only ids**; every displayed field is hydrated from D1. One
+source of truth, and the index can never serve a stale title.
+
+Semantic failures **fall back to FTS** rather than erroring — a degraded search
+beats no search, and the fallback logging is what surfaced both bugs above.
+
+### Backfill
+
+`POST /api/embed?limit=200&offset=N` (same `x-sync-token` guard as sync), walked
+until `done: true`. Sliced for the subrequest limit, exactly like the board
+sweep.
+
 ## Live roles (`worker/`, `schema.sql`)
 
 A job index over the **public ATS board feeds** — the no-auth JSON endpoints

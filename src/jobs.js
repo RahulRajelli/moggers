@@ -45,6 +45,9 @@ function query() {
   if (el.country.value) p.set("country", el.country.value);
   if (el.company.value) p.set("company", el.company.value);
   if (el.remote.checked) p.set("remote", "1");
+  /* Only meaningful with a query, and it costs a Workers AI call — so never
+     send it for the unfiltered browse view. */
+  if (el.semantic?.checked && el.q.value.trim()) p.set("mode", "semantic");
   p.set("limit", String(PAGE));
   p.set("offset", String(offset));
   return p;
@@ -176,6 +179,7 @@ export async function initJobs() {
     country: $("jobCountry"),
     company: $("jobCompany"),
     remote: $("jobRemote"),
+    semantic: $("jobSemantic"),
     list: $("jobList"),
     more: $("jobMore"),
   };
@@ -191,7 +195,7 @@ export async function initJobs() {
     clearTimeout(debounce);
     debounce = setTimeout(() => load(), 250);
   });
-  for (const c of [el.country, el.company, el.remote]) {
+  for (const c of [el.country, el.company, el.remote, el.semantic].filter(Boolean)) {
     c.addEventListener("change", () => load());
   }
   el.more.addEventListener("click", () => load({ append: true }));

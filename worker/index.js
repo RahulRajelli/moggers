@@ -11,6 +11,7 @@ import {
 import {
   PROVIDERS, startLogin, completeLogin, currentUser, logout, deleteAccount, purgeExpired,
 } from "./auth.js";
+import { indexJobs, semanticSearch, EMBED_MODEL, EMBED_DIMS, BATCH } from "./embed.js";
 
 /* SameSite=Lax already withholds the session cookie from cross-site POSTs, so
    this is belt-and-braces — but it is two lines and it closes the gap for any
@@ -68,6 +69,56 @@ export function ftsQuery(raw) {
   const last = quoted.length - 1;
   if (tokens[last].length >= 3) quoted[last] += "*";
   return quoted.join(" AND ");
+}
+
+/* Semantic path: Vectorize gives ranked ids, D1 supplies every displayable
+   field and applies the same filters and de-duplication as keyword search.
+   Vectorize stores only ids, so there is one source of truth and the index can
+   never serve a stale title. */
+async function listJobsSemantic(env, url, query) {
+  const p = url.searchParams;
+  const limit = Math.min(parseInt(p.get("limit") || "50", 10) || 50, 200);
+  const offset = Math.max(parseInt(p.get("offset") || "0", 10) || 0, 0);
+
+  /* Over-fetch to the cap: filters are applied AFTER ranking, so a narrow
+     filter can leave few survivors. 100 is Vectorize's hard maximum. */
+  const ranked = await semanticSearch(env, query, { topK: 100 });
+  if (!ranked.length) return { jobs: [], total: 0, limit, offset, mode: "semantic" };
+
+  const rank = new Map(ranked.map((r, i) => [r.id, { i, score: r.score }]));
+  const ids = ranked.map((r) => r.id);
+
+  const where = ["j.active = 1", `j.id IN (${ids.map(() => "?").join(",")})`];
+  const binds = [...ids];
+  const bind = (v) => { binds.push(v); return "?"; };
+
+  const country = (p.get("country") || "").trim();
+  if (country) where.push(`j.country = ${bind(country)}`);
+  const company = (p.get("company") || "").trim();
+  if (company) where.push(`j.company = ${bind(company)}`);
+  if (p.get("remote") === "1") where.push("j.remote = 1");
+  if (p.get("thin") !== "1") where.push("j.thin = 0");
+
+  const rows = await env.DB.prepare(
+    `SELECT j.id, j.company, j.title, j.url, j.location, j.location_raw,
+            j.country, j.remote, j.jd_chars, j.first_seen,
+            MAX(COALESCE(j.posted_at, j.first_seen)) AS posted_at,
+            COUNT(*) AS listings
+     FROM jobs j WHERE ${where.join(" AND ")}
+     GROUP BY j.dedup_key`
+  ).bind(...binds).all();
+
+  /* Restore Vectorize's ordering — SQL returned rows in arbitrary order, and
+     the whole point of this path is the ranking. */
+  const all = (rows.results || [])
+    .map((r) => ({ ...r, _score: rank.get(r.id)?.score ?? 0, _i: rank.get(r.id)?.i ?? 1e9 }))
+    .sort((a, b) => a._i - b._i);
+
+  return {
+    jobs: all.slice(offset, offset + limit).map(({ _i, _score, ...j }) => ({ ...j, score: _score })),
+    total: all.length,
+    limit, offset, mode: "semantic",
+  };
 }
 
 async function listJobs(db, url) {
@@ -357,6 +408,19 @@ export default {
 
     try {
       if (url.pathname === "/api/jobs") {
+        /* Semantic is opt-in per request. It costs a Workers AI call (10k
+           Neurons/day), so it must never be the default for crawlers or the
+           unfiltered browse view — which is also why it only runs when there
+           is an actual query. Falls back to FTS on any failure rather than
+           erroring: a degraded search beats no search. */
+        const q = (url.searchParams.get("q") || "").trim();
+        if (q && url.searchParams.get("mode") === "semantic" && env.AI && env.VECTORIZE) {
+          try {
+            return json(await listJobsSemantic(env, url, q), 200, READ_CACHE);
+          } catch (err) {
+            console.error("semantic search failed, falling back to fts", err);
+          }
+        }
         return json(await listJobs(env.DB, url), 200, READ_CACHE);
       }
 
@@ -447,6 +511,34 @@ export default {
           }, 400);
         }
         return json(await sync(env.DB, only));
+      }
+
+      /* Embed a slice of the corpus into Vectorize. Same secret guard as sync,
+         and sliced for the same reason: 50 subrequests per invocation on free,
+         so this walks the table `limit` rows at a time rather than trying to do
+         2,000+ in one go. Returns the next offset to continue from. */
+      if (url.pathname === "/api/embed") {
+        if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+        const token = request.headers.get("x-sync-token") || "";
+        if (!env.SYNC_TOKEN || !safeEqual(token, env.SYNC_TOKEN)) {
+          return json({ error: "unauthorized" }, 401);
+        }
+        const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10) || 200, 500);
+        const offset = Math.max(parseInt(url.searchParams.get("offset") || "0", 10) || 0, 0);
+
+        const rows = await env.DB.prepare(
+          `SELECT id, title, company, location, jd FROM jobs
+           WHERE active = 1 AND thin = 0
+           ORDER BY id LIMIT ?1 OFFSET ?2`
+        ).bind(limit, offset).all();
+
+        const jobs = rows.results || [];
+        const written = jobs.length ? await indexJobs(env, jobs) : 0;
+        return json({
+          model: EMBED_MODEL, dims: EMBED_DIMS, batch: BATCH,
+          offset, written, next_offset: offset + jobs.length,
+          done: jobs.length < limit,
+        });
       }
 
       return json({ error: "not found" }, 404);

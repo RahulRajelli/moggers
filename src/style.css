@@ -286,6 +286,10 @@ code { font-family: var(--mono); }
 }
 .toggle input { accent-color: var(--ink); width: 15px; height: 15px; }
 .toggle:has(input:checked) { background: var(--acid); }
+/* Marked out from the plain filters: this one changes HOW search works, not
+   what is filtered, and it costs an inference call. */
+.toggle--semantic:has(input:checked) { background: var(--ink); color: var(--paper); }
+.toggle--semantic:has(input:checked) input { accent-color: var(--acid); }
 
 .joblist { display: grid; gap: 0.6rem; }
 .joblist__msg { margin: 0; padding: 1.5rem 0; font-size: 0.85rem; opacity: 0.6; }
