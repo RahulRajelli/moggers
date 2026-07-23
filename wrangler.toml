@@ -58,10 +58,14 @@ run_worker_first = [
 
 [ai]
 binding = "AI"
+# `remote` only affects `wrangler dev`: there is no local emulation of Workers
+# AI or Vectorize, so dev must call the real services. Production is unaffected.
+remote = true
 
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "moggers-jobs"
+remote = true
 
 [[d1_databases]]
 binding = "DB"

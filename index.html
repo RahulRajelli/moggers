@@ -150,6 +150,29 @@
     </div>
   </section>
 
+  <!-- ── MATCHER ──────────────────────────────────────────── -->
+  <section class="matcher" id="matcher" hidden>
+    <div class="matcher__head">
+      <h2 class="matcher__title">MATCH<br />ME</h2>
+      <p class="matcher__blurb">
+        Paste your resume text and it ranks the live roles against it, naming the
+        one thing missing for each. Retrieval is by meaning, not keywords.
+        <b class="matcher__warn">This sends the text you paste to an AI model.</b>
+        The resume checker above still never sends anything — that stays in your
+        browser.
+      </p>
+    </div>
+
+    <textarea id="matchInput" rows="7" placeholder="Paste your resume as plain text. Nothing is sent until you press the button."></textarea>
+    <div class="matcher__row">
+      <button type="button" id="matchGo">SEND &amp; MATCH →</button>
+      <button type="button" id="matchFill" class="matcher__fill" hidden>use the text from my scan</button>
+      <span class="matcher__note" id="matchNote"></span>
+    </div>
+
+    <div id="matchOut" class="matchout" aria-live="polite"></div>
+  </section>
+
   <!-- ── JOBS ─────────────────────────────────────────────── -->
   <section class="jobs" id="jobs">
     <div class="jobs__head">

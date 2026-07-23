@@ -12,6 +12,7 @@ import {
   PROVIDERS, startLogin, completeLogin, currentUser, logout, deleteAccount, purgeExpired,
 } from "./auth.js";
 import { indexJobs, semanticSearch, EMBED_MODEL, EMBED_DIMS, BATCH } from "./embed.js";
+import { matchResume, checkBudget, chargeBudget, DAILY_NEURON_BUDGET } from "./match.js";
 
 /* SameSite=Lax already withholds the session cookie from cross-site POSTs, so
    this is belt-and-braces — but it is two lines and it closes the gap for any
@@ -474,6 +475,42 @@ export default {
         }
 
         return json({ error: "method not allowed" }, 405);
+      }
+
+      /* RAG matcher. Sign-in required — this is the answer to the
+         unauthenticated-LLM-endpoint problem: an account gives a stable
+         identity to meter against, where an IP rotates. It is also the first
+         feature that makes an account worth creating. */
+      if (url.pathname === "/api/match") {
+        if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+        if (!sameOrigin(request, url)) return json({ error: "bad origin" }, 403);
+
+        const user = await currentUser(env.DB, request);
+        if (!user) return json({ error: "sign in required" }, 401);
+
+        /* Fails CLOSED, unlike the read endpoints: a missing limiter must not
+           mean unlimited inference. */
+        const burst = await checkRate(env.API_LIMITER, `match:${user.id}`, { failClosed: true });
+        if (!burst.ok) return json({ error: "too many requests — wait a minute" }, 429);
+
+        if (!env.AI || !env.VECTORIZE) return json({ error: "matcher unavailable" }, 503);
+
+        if (!(await checkBudget(env.DB))) {
+          return json({
+            error: "daily AI budget reached — the matcher resets at 00:00 UTC",
+            budget: DAILY_NEURON_BUDGET,
+          }, 429);
+        }
+
+        const body = await request.json().catch(() => ({}));
+        const resume = typeof body?.resume === "string" ? body.resume : "";
+        if (!resume.trim()) return json({ error: "resume text required" }, 400);
+
+        const result = await matchResume(env, resume);
+        if (result.error) return json(result, 400);
+        // Charge only on success, so a failed run does not consume budget.
+        await chargeBudget(env.DB);
+        return json(result);
       }
 
       if (url.pathname === "/api/account" && request.method === "DELETE") {

@@ -298,6 +298,9 @@ async function handleFile(file) {
     renderKeywords(text);
 
     results.hidden = false;
+    /* Kept in memory only, so the matcher can offer a prefill. Never sent. */
+    lastScanText = deligature(flatten(text));
+    document.dispatchEvent(new CustomEvent("moggers:scanned"));
     dropLabel.textContent = file.name.toUpperCase();
     results.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
@@ -334,11 +337,21 @@ drop.addEventListener("drop", (e) => handleFile(e.dataTransfer.files[0]));
 import("./auth.js")
   .then(({ initAuth }) => initAuth())
   .catch((err) => console.warn("auth unavailable:", err))
-  .finally(() =>
+  .finally(() => {
     import("./jobs.js")
       .then(({ initJobs }) => initJobs())
-      .catch((err) => console.warn("job index unavailable:", err))
-  );
+      .catch((err) => console.warn("job index unavailable:", err));
+    /* The matcher needs the same Worker backend. It reveals itself only if the
+       module loads, so `vite dev` (no API) shows nothing rather than a button
+       that always fails. */
+    import("./match.js")
+      .then(({ initMatch }) => initMatch(() => lastScanText))
+      .catch((err) => console.warn("matcher unavailable:", err));
+  });
+
+/* Held so the matcher can offer to prefill from a scan the user already ran —
+   it never leaves the page on its own. */
+let lastScanText = "";
 
 /* A resume rendered from the same template with ligatures left on — the exact
    defect this tool looks for, so the failure mode is demonstrable without
