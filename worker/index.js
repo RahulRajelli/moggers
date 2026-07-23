@@ -20,6 +20,7 @@ import { getAgentByName } from "agents";
 
 /* The Durable Object class must be exported from the Worker's entry point or
    the binding cannot resolve it ("Namespace not found"). */
+import { prepInterview, loadJob, NEURONS_PER_INTERVIEW } from "./interview.js";
 export { MoggerAgent } from "./agent.js";
 
 /* SameSite=Lax already withholds the session cookie from cross-site POSTs, so
@@ -450,6 +451,67 @@ export default {
         if (result.error) return json(result, 400);
         // Charge only our budget, only on success, and never for BYOK runs.
         if (!geminiKey) await chargeBudget(env.DB);
+        return json(result);
+      }
+
+      /* Interview prep for one role. Same guards as /api/match — sign-in,
+         same-origin, fail-closed burst limit — because it has the same
+         exposure: real per-call spend.
+         BYOK is the DEFAULT path here rather than the fallback. The matcher is
+         what makes an account worth having and gets the shared budget; this is
+         a nice-to-have, and a nice-to-have should not be what empties the day. */
+      if (url.pathname === "/api/interview") {
+        if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+        if (!sameOrigin(request, url)) return json({ error: "bad origin" }, 403);
+
+        const user = await currentUser(env.DB, request);
+        if (!user) return json({ error: "sign in required" }, 401);
+
+        const burst = await checkRate(env.API_LIMITER, `prep:${user.id}`, { failClosed: true });
+        if (!burst.ok) return json({ error: "too many requests — wait a minute" }, 429);
+
+        if (!env.AI) return json({ error: "interview prep unavailable" }, 503);
+
+        const body = await request.json().catch(() => ({}));
+        const jobId = typeof body?.job_id === "string" ? body.job_id : "";
+        if (!jobId) return json({ error: "job_id required" }, 400);
+
+        const geminiKey = typeof body?.gemini_key === "string" ? body.gemini_key.trim() : "";
+
+        /* Read the JD from OUR table rather than accepting one from the client:
+           a client-supplied JD is an open prompt-injection funnel into the
+           shared budget, and there would be nothing to stop it being 40 kB of
+           anything at all. */
+        const job = await loadJob(env.DB, jobId);
+        if (!job) return json({ error: "unknown role" }, 404);
+        if (!job.jd || job.jd.length < 400) {
+          return json({
+            error: "this posting is too thin to prepare from — open the original and try another",
+          }, 422);
+        }
+
+        if (!geminiKey && !(await checkBudget(env.DB, NEURONS_PER_INTERVIEW))) {
+          return json({
+            error: "daily AI budget reached — resets at 00:00 UTC",
+            budget_exhausted: true,
+          }, 429);
+        }
+
+        let result;
+        try {
+          result = await prepInterview(env, job, { geminiKey: geminiKey || null });
+        } catch (err) {
+          const msg = String(err?.message || "");
+          if (geminiKey) return json({ error: msg.slice(0, 200) }, 400);
+          console.error("interview prep failed", err);
+          return json({
+            error: "the prep service is unavailable right now",
+            backend_down: true,
+          }, 503);
+        }
+        if (result.error) return json(result, 502);
+        // Charge only our budget, only on success, and never for BYOK runs.
+        if (!geminiKey) await chargeBudget(env.DB, NEURONS_PER_INTERVIEW);
         return json(result);
       }
 

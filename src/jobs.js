@@ -139,7 +139,79 @@ function card(j) {
     ? `<a class="job__link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`
     : `<div class="job__link job__link--dead">${inner}</div>`;
 
-  return `<div class="job${href ? "" : " job--nolink"}">${body}${star}</div>`;
+  /* Outside the anchor for the same reason the star is: a button inside a link
+     is invalid and leaves the click target ambiguous for keyboard users. */
+  const prep = `<button type="button" class="job__prep" data-prep="${escapeHtml(j.id)}"
+      title="${isSignedIn() ? "Likely interview questions for this role" : "Sign in for interview prep"}">PREP</button>`;
+
+  return `<div class="job${href ? "" : " job--nolink"}">${body}${prep}${star}</div>
+    <div class="prep" id="prep-${escapeHtml(j.id)}" hidden></div>`;
+}
+
+/* Interview prep, rendered under the role it belongs to.
+ *
+ * Deliberately NOT preloaded with the list: it is one model call per role and
+ * the list shows 24 at a time. It runs when someone asks for it, once. */
+async function runPrep(jobId, btn) {
+  const box = document.getElementById(`prep-${jobId}`);
+  if (!box) return;
+
+  if (!isSignedIn()) {
+    box.hidden = false;
+    box.innerHTML = `<p class="prep__msg">Interview prep needs an account —
+      <a href="/signin.html">sign in</a>. It is what keeps the AI budget from
+      being drained by scripts.</p>`;
+    return;
+  }
+  // Second press closes it rather than spending another call.
+  if (!box.hidden) { box.hidden = true; return; }
+
+  box.hidden = false;
+  box.innerHTML = `<p class="prep__msg">Reading the posting and drafting questions…</p>`;
+  btn.disabled = true;
+
+  /* The BYOK key lives in localStorage under the matcher's key. Reading it here
+     keeps one key for the whole site rather than asking twice. */
+  let key = "";
+  try { key = localStorage.getItem("moggers_gemini_key") || ""; } catch { /* private mode */ }
+
+  try {
+    const res = await fetch("/api/interview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(key ? { job_id: jobId, gemini_key: key } : { job_id: jobId }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      box.innerHTML = `<p class="prep__msg">${escapeHtml(data.error || "prep failed")}</p>`;
+      return;
+    }
+
+    const list = (items, title) =>
+      items.length
+        ? `<h4 class="prep__h">${title}</h4><ol class="prep__list">${items
+            .map((i) => `<li>${escapeHtml(i.q)}${i.why ? `<em>${escapeHtml(i.why)}</em>` : ""}</li>`)
+            .join("")}</ol>`
+        : "";
+
+    box.innerHTML =
+      list(data.technical, "They will probably ask") +
+      list(data.experience, "About your experience") +
+      (data.ask_them?.length
+        ? `<h4 class="prep__h">Worth asking them</h4><ul class="prep__list prep__list--plain">${data.ask_them
+            .map((q) => `<li>${escapeHtml(q)}</li>`)
+            .join("")}</ul>`
+        : "") +
+      `<p class="prep__note">${
+        data.byok
+          ? "Generated with your own Gemini key — this did not touch the shared budget."
+          : "Drawn from this posting's own description, not a generic list."
+      }</p>`;
+  } catch {
+    box.innerHTML = `<p class="prep__msg">Could not reach the prep service — try again in a moment.</p>`;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function load({ append = false } = {}) {
@@ -253,6 +325,13 @@ export async function initJobs() {
   /* Delegated: cards are re-rendered on every filter change, so per-card
      listeners would leak and go stale. */
   el.list.addEventListener("click", async (e) => {
+    const prepBtn = e.target.closest(".job__prep");
+    if (prepBtn) {
+      e.preventDefault();
+      await runPrep(prepBtn.dataset.prep, prepBtn);
+      return;
+    }
+
     const btn = e.target.closest(".job__star");
     if (!btn) return;
     e.preventDefault();

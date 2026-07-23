@@ -338,6 +338,44 @@ function renderKeywords(text) {
     .join("");
 }
 
+/* Lazily imported so the heuristics are not in the critical path — nothing
+   here runs until a PDF has actually been read. */
+async function renderRoast(rawText) {
+  const panel = $("roastPanel");
+  try {
+    const { roastResume } = await import("./roast.js");
+    const r = roastResume(rawText);
+
+    if (!r.total) { panel.hidden = true; return; }
+
+    $("roastMeta").textContent =
+      `${r.total} bullet${r.total > 1 ? "s" : ""} · ${r.flagged.length} flagged · ${r.clean} clean`;
+
+    /* Saying "all clean" is worth as much as listing faults — it is the only
+       way the panel can ever be good news rather than an absence of output. */
+    $("roast").innerHTML = r.flagged.length
+      ? r.flagged
+          .map(
+            (b) => `
+        <div class="bullet">
+          <p class="bullet__text">${escapeHtml(b.text)}</p>
+          ${b.issues
+            .map(
+              (i) => `<p class="bullet__issue"><span class="bullet__tag">${escapeHtml(i.tag)}</span>${escapeHtml(i.note)}</p>`
+            )
+            .join("")}
+        </div>`
+          )
+          .join("")
+      : `<p class="roast__clean">Every bullet cleared these checks. Numbers present, no filler, active voice. Rare.</p>`;
+
+    panel.hidden = false;
+  } catch (err) {
+    console.warn("roast unavailable", err);
+    panel.hidden = true;
+  }
+}
+
 /* ── flow ────────────────────────────────────────────────────────────── */
 async function handleFile(file) {
   if (!file) return;
@@ -357,6 +395,9 @@ async function handleFile(file) {
     renderChecks(checks);
     renderLayer(text, pageCount);
     renderKeywords(text);
+    /* RAW text, not flattened: flatten() collapses newlines and without line
+       structure there are no bullets left to examine. */
+    renderRoast(text);
 
     results.hidden = false;
     /* Kept in memory only, so the matcher can offer a prefill. Never sent. */
@@ -390,6 +431,8 @@ function resetScan() {
   $("checks").innerHTML = "";
   $("layer").innerHTML = "";
   $("kwPanel").hidden = true;
+  $("roastPanel").hidden = true;
+  $("roast").innerHTML = "";
   dropLabel.textContent = "DROP YOUR PDF";
   drop.classList.remove("is-busy");
   document.dispatchEvent(new CustomEvent("moggers:cleared"));

@@ -12,6 +12,7 @@
 import { describe, it, expect } from "vitest";
 import { escapeHtml, safeUrl } from "../src/jobs.js";
 import { pathFor, PATHS } from "../src/paths.js";
+import { roastBullet, roastResume, extractBullets } from "../src/roast.js";
 import { safeEqual, checkRate } from "../worker/security.js";
 import { normalizeLocation, jobHash, hoursAgo,
          REFRESH_AFTER_HOURS, CLOSE_AFTER_HOURS } from "../worker/normalize.js";
@@ -427,5 +428,63 @@ describe("gap -> path map", () => {
         expect(safeUrl(url), url).toBe(url);
       }
     }
+  });
+});
+
+/* The roast is the only feature that judges CONTENT, so a false positive is a
+   user being told to fix something that is fine. Each check must fire only on
+   the thing it names. */
+describe("bullet roast", () => {
+  const tags = (t) => roastBullet(t).issues.map((i) => i.tag);
+
+  it("catches the weak opener and names it", () => {
+    expect(tags("Responsible for maintaining 12 build servers across 3 regions"))
+      .toContain("WEAK OPENER");
+    expect(tags("Rebuilt the CI pipeline, cutting build time 40%"))
+      .not.toContain("WEAK OPENER");
+  });
+
+  it("flags a bullet with no quantity anywhere", () => {
+    expect(tags("Improved the deployment process for the platform team")).toContain("NO NUMBER");
+    // Spelled-out numbers count — "three regions" is still a quantity.
+    expect(tags("Led three engineers through a migration to ROS 2")).not.toContain("NO NUMBER");
+  });
+
+  it("does not call an active bullet passive", () => {
+    expect(tags("The pipeline was rewritten by the team over 6 weeks")).toContain("PASSIVE");
+    expect(tags("Rewrote the pipeline over 6 weeks")).not.toContain("PASSIVE");
+  });
+
+  it("catches first person but not words merely containing i", () => {
+    expect(tags("I built 4 services handling 12k requests per second")).toContain("FIRST PERSON");
+    expect(tags("Built 4 services handling 12k requests per second")).not.toContain("FIRST PERSON");
+  });
+
+  it("ignores contact lines, URLs and section headers when finding bullets", () => {
+    const text = [
+      "PROFESSIONAL EXPERIENCE",
+      "someone@example.com · +91 90000 00000 · linkedin.com/in/someone",
+      "https://github.com/someone/a-very-long-repository-name-here-indeed",
+      "Shipped 3 perception features to 40 production robots over 18 months",
+    ].join("\n");
+    const bullets = extractBullets(text);
+    expect(bullets).toHaveLength(1);
+    expect(bullets[0]).toMatch(/^Shipped 3 perception/);
+  });
+
+  it("reports clean bullets as clean rather than saying nothing", () => {
+    const r = roastResume("Shipped 3 perception features to 40 production robots over 18 months");
+    expect(r.total).toBe(1);
+    expect(r.flagged).toHaveLength(0);
+    expect(r.clean).toBe(1);
+  });
+
+  it("sorts the worst offenders first", () => {
+    const r = roastResume([
+      "Rebuilt the planner and cut replan latency 30% across 200 robots",
+      "I was responsible for various tasks and helped the team as a team player",
+    ].join("\n"));
+    expect(r.flagged[0].text).toMatch(/^I was responsible/);
+    expect(r.flagged[0].issues.length).toBeGreaterThan(2);
   });
 });

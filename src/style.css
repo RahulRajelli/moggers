@@ -545,6 +545,47 @@ code { font-family: var(--mono); }
   float: right; width: 74px; margin: 0 0 0.5rem 0.9rem; max-width: none;
 }
 
+/* ── interview prep ─────────────────────────────────────── */
+.job__prep {
+  flex: none; align-self: stretch;
+  border: none; border-left: 3px solid var(--ink); background: none;
+  font-family: var(--mono); font-weight: 700; font-size: 0.62rem;
+  letter-spacing: 0.1em; padding: 0 0.6rem; cursor: pointer; color: inherit;
+}
+.job__prep:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+.job__prep:disabled { opacity: 0.4; cursor: progress; }
+.job__prep:focus-visible { outline: 3px solid var(--alert); outline-offset: -3px; }
+
+.prep {
+  border: var(--rule); border-top: none; background: var(--paper);
+  padding: 0.9rem 1rem 1rem; margin: -0.6rem 0 0.6rem;
+}
+.prep__h {
+  font-family: var(--display); font-size: 0.72rem; letter-spacing: 0.06em;
+  text-transform: uppercase; margin: 0.8rem 0 0.4rem;
+}
+.prep__h:first-child { margin-top: 0; }
+.prep__list { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.4rem; }
+.prep__list--plain { list-style: none; padding-left: 0; }
+.prep__list li { font-size: 0.78rem; }
+.prep__list em { display: block; font-style: normal; font-size: 0.68rem; opacity: 0.5; }
+.prep__msg { margin: 0; font-size: 0.8rem; opacity: 0.7; }
+.prep__note { margin: 0.8rem 0 0; font-size: 0.68rem; opacity: 0.45; }
+
+/* ── the bullet roast ───────────────────────────────────── */
+.roast { display: grid; gap: 0.8rem; }
+.bullet { border-left: 5px solid var(--alert); padding: 0.1rem 0 0.1rem 0.8rem; }
+.bullet__text { margin: 0 0 0.4rem; font-size: 0.82rem; font-weight: 700; }
+.bullet__issue {
+  margin: 0 0 0.25rem; font-size: 0.74rem; opacity: 0.8;
+  display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap;
+}
+.bullet__tag {
+  flex: none; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em;
+  background: var(--ink); color: var(--paper); padding: 0.12rem 0.4rem;
+}
+.roast__clean { margin: 0; font-size: 0.85rem; font-weight: 700; }
+
 /* ── CLOSE THE GAP ──────────────────────────────────────── */
 /* Sits under its match card, indented so it reads as belonging to it. Quiet by
    default: the role is the thing being looked at, and this is the follow-up. */
