@@ -495,21 +495,36 @@ export default {
 
         if (!env.AI || !env.VECTORIZE) return json({ error: "matcher unavailable" }, 503);
 
-        if (!(await checkBudget(env.DB))) {
-          return json({
-            error: "daily AI budget reached — the matcher resets at 00:00 UTC",
-            budget: DAILY_NEURON_BUDGET,
-          }, 429);
-        }
-
         const body = await request.json().catch(() => ({}));
         const resume = typeof body?.resume === "string" ? body.resume : "";
         if (!resume.trim()) return json({ error: "resume text required" }, 400);
 
-        const result = await matchResume(env, resume);
+        /* A user-supplied Gemini key runs on THEIR quota, so it skips our
+           budget entirely — that is the point of the fallback. The key is used
+           for this one request and never stored, logged or echoed back. */
+        const geminiKey = typeof body?.gemini_key === "string" ? body.gemini_key.trim() : "";
+
+        if (!geminiKey && !(await checkBudget(env.DB))) {
+          return json({
+            error: "daily AI budget reached — resets at 00:00 UTC",
+            budget_exhausted: true, // the UI offers the BYOK fallback on this
+          }, 429);
+        }
+
+        let result;
+        try {
+          result = await matchResume(env, resume, { geminiKey: geminiKey || null });
+        } catch (err) {
+          /* Gemini errors are the user's to act on (bad key, quota spent), so
+             they surface verbatim — generateWithGemini has already stripped any
+             key from the message. Everything else stays generic. */
+          const msg = String(err?.message || "");
+          if (geminiKey) return json({ error: msg.slice(0, 200) }, 400);
+          throw err;
+        }
         if (result.error) return json(result, 400);
-        // Charge only on success, so a failed run does not consume budget.
-        await chargeBudget(env.DB);
+        // Charge only our budget, only on success, and never for BYOK runs.
+        if (!geminiKey) await chargeBudget(env.DB);
         return json(result);
       }
 

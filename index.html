@@ -170,6 +170,17 @@
       <span class="matcher__note" id="matchNote"></span>
     </div>
 
+    <details class="byok" id="byok">
+      <summary><span>+</span> Use your own Gemini key <em>— runs on your quota, not ours</em></summary>
+      <p class="byok__help">
+        Free from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com</a>
+        — no card, 250 requests a day. Stored in this browser only; it is sent
+        with each match, used once, and never written to our database or logs.
+      </p>
+      <input type="password" id="byokKey" placeholder="AIza…" autocomplete="off" spellcheck="false" />
+      <label class="byok__save"><input type="checkbox" id="byokRemember" checked /> <span>remember on this device</span></label>
+    </details>
+
     <div id="matchOut" class="matchout" aria-live="polite"></div>
   </section>
 

@@ -15,6 +15,7 @@
  * model that invents one is dropped rather than rendered.
  */
 import { embedQuery } from "./embed.js";
+import { generateWithGemini, GEMINI_MODEL } from "./gemini.js";
 
 /* Chosen by benchmark (POST /api/bench?model=…), not by reputation.
  *
@@ -152,8 +153,14 @@ function buildPrompt(resume, roles) {
  * Run the pipeline. Returns { matches, retrieved, model } or throws.
  * `env` needs AI, VECTORIZE and DB.
  */
-export async function matchResume(env, resumeText) {
+export async function matchResume(env, resumeText, { geminiKey = null } = {}) {
   const GEN_MODEL = env.GEN_MODEL || DEFAULT_GEN_MODEL;
+  /* Declared up here because the early returns below reference them — `let` is
+     in the temporal dead zone until its declaration, so leaving these beside
+     the generate step threw ReferenceError on the no-results path. */
+  const byok = Boolean(geminiKey);
+  const usedModel = byok ? GEMINI_MODEL : GEN_MODEL;
+
   const resume = String(resumeText || "").trim();
   if (resume.length < 120) {
     return { error: "resume too short — paste a few hundred characters at least" };
@@ -167,7 +174,7 @@ export async function matchResume(env, resumeText) {
     returnValues: false,
   });
   const ids = (found?.matches || []).map((m) => m.id);
-  if (!ids.length) return { matches: [], retrieved: 0, model: GEN_MODEL };
+  if (!ids.length) return { matches: [], retrieved: 0, model: usedModel };
 
   // ── augment ──
   const rows = await env.DB.prepare(
@@ -204,14 +211,26 @@ export async function matchResume(env, resumeText) {
     }
   }
   const roles = picked;
-  if (!roles.length) return { matches: [], retrieved: 0, model: GEN_MODEL };
+  if (!roles.length) return { matches: [], retrieved: 0, model: usedModel };
 
   // ── generate ──
-  const res = await env.AI.run(GEN_MODEL, {
-    messages: buildPrompt(resume, roles),
-    max_tokens: 500, // 6 roles x ~70 tokens; a bigger cap just invites rambling
-    temperature: 0.2, // ranking should be stable across runs
-  });
+  /* A user-supplied Gemini key runs on THEIR quota, so it bypasses our budget
+     entirely — that is the whole point of the fallback. Same prompt, and the
+     output goes through the same parse-and-validate path, so a hallucinated id
+     is dropped identically whichever model produced it. */
+  const prompt = buildPrompt(resume, roles);
+  let res;
+
+  if (byok) {
+    const text = await generateWithGemini(geminiKey, prompt, { maxTokens: 700 });
+    res = { response: text };
+  } else {
+    res = await env.AI.run(GEN_MODEL, {
+      messages: prompt,
+      max_tokens: 500, // 6 roles x ~70 tokens; a bigger cap just invites rambling
+      temperature: 0.2, // ranking should be stable across runs
+    });
+  }
 
   /* Response shape varies by model family, and none of it is documented in one
      place: llama returns `response`; gpt-oss and several others return an
@@ -270,11 +289,12 @@ export async function matchResume(env, resumeText) {
       })),
       retrieved: roles.length,
       degraded: true,
-      model: GEN_MODEL,
+      model: usedModel,
+      byok,
     };
   }
 
-  return { matches, retrieved: roles.length, model: GEN_MODEL };
+  return { matches, retrieved: roles.length, model: usedModel, byok };
 }
 
 

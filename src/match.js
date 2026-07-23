@@ -42,6 +42,20 @@ function card(m) {
     : `<div class="match match--nolink">${inner}</div>`;
 }
 
+/* The key lives in this browser and nowhere else. It is sent with each match
+   request, used once server-side, and never persisted there. localStorage is
+   readable by any script on this origin — acceptable because the strict CSP
+   admits no third-party scripts, and the alternative (storing it on our server)
+   would make us custodian of user credentials. */
+const KEY_STORE = "moggers_gemini_key";
+
+function loadKey() {
+  try { return localStorage.getItem(KEY_STORE) || ""; } catch { return ""; }
+}
+function saveKey(v) {
+  try { v ? localStorage.setItem(KEY_STORE, v) : localStorage.removeItem(KEY_STORE); } catch { /* private mode */ }
+}
+
 let busy = false;
 
 async function run() {
@@ -67,16 +81,27 @@ async function run() {
   note.textContent = "";
   out.innerHTML = `<p class="matchout__msg">Embedding your resume, retrieving roles, ranking…</p>`;
 
+  const key = $("byokKey")?.value.trim() || "";
+
   try {
     const res = await fetch("/api/match", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ resume: text }),
+      body: JSON.stringify(key ? { resume: text, gemini_key: key } : { resume: text }),
     });
     const data = await res.json();
 
     if (!res.ok) {
-      out.innerHTML = `<p class="matchout__msg">${escapeHtml(data.error || "matching failed")}</p>`;
+      /* When OUR budget is spent, point at the fallback rather than just
+         saying no — the user can keep going on their own free quota. */
+      const extra = data.budget_exhausted
+        ? ` <button type="button" class="matchout__byok" id="matchOpenByok">use your own Gemini key →</button>`
+        : "";
+      out.innerHTML = `<p class="matchout__msg">${escapeHtml(data.error || "matching failed")}${extra}</p>`;
+      $("matchOpenByok")?.addEventListener("click", () => {
+        $("byok").open = true;
+        $("byokKey").focus();
+      });
       return;
     }
     if (!data.matches?.length) {
@@ -84,10 +109,12 @@ async function run() {
       return;
     }
 
-    out.innerHTML =
-      (data.degraded
-        ? `<p class="matchout__msg">Ranked by similarity — the model's notes were unavailable this time.</p>`
-        : "") + data.matches.map(card).join("");
+    const banner = data.byok
+      ? `<p class="matchout__msg">Matched with your own Gemini key — this did not touch the shared budget.</p>`
+      : data.degraded
+      ? `<p class="matchout__msg">Ranked by similarity — the model's notes were unavailable this time.</p>`
+      : "";
+    out.innerHTML = banner + data.matches.map(card).join("");
   } catch {
     out.innerHTML = `<p class="matchout__msg">Matching failed. Try again in a moment.</p>`;
   } finally {
@@ -102,6 +129,19 @@ export function initMatch(getScanText) {
   section.hidden = false;
 
   $("matchGo").addEventListener("click", run);
+
+  const keyInput = $("byokKey");
+  const remember = $("byokRemember");
+  if (keyInput) {
+    const existing = loadKey();
+    if (existing) {
+      keyInput.value = existing;
+      $("byok").open = true;
+    }
+    const persist = () => saveKey(remember?.checked ? keyInput.value.trim() : "");
+    keyInput.addEventListener("change", persist);
+    remember?.addEventListener("change", persist);
+  }
 
   /* Offer to prefill from the X-Ray scan — the text is already in the page, so
      this saves a copy-paste. It is still the user pressing send. */

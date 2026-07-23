@@ -284,6 +284,27 @@ code { font-family: var(--mono); }
 }
 .matcher__note { font-size: 0.76rem; color: var(--alert); font-weight: 700; }
 
+.byok { margin-top: 0.9rem; max-width: 60ch; }
+.byok summary {
+  cursor: pointer; font-size: 0.8rem; padding: 0.4rem 0; list-style: none;
+  display: flex; gap: 0.5rem; align-items: baseline;
+}
+.byok summary::-webkit-details-marker { display: none; }
+.byok summary span { font-family: var(--display); color: var(--alert); }
+.byok summary em { opacity: 0.6; font-style: normal; font-size: 0.76rem; }
+.byok__help { font-size: 0.76rem; opacity: 0.8; margin: 0.4rem 0 0.6rem; }
+.byok input[type="password"] {
+  width: 100%; padding: 0.6rem 0.7rem; border: var(--rule);
+  background: var(--paper); color: var(--ink); font-family: var(--mono); font-size: 0.8rem;
+}
+.byok input[type="password"]:focus { outline: none; box-shadow: var(--shadow-sm); }
+.byok__save { display: flex; align-items: center; gap: 0.45rem; font-size: 0.74rem; margin-top: 0.5rem; }
+.matchout__byok {
+  border: 2px solid var(--ink); background: var(--acid); color: var(--ink);
+  font-family: var(--mono); font-size: 0.74rem; font-weight: 700;
+  padding: 0.3rem 0.5rem; cursor: pointer; margin-left: 0.4rem;
+}
+
 .matchout { display: grid; gap: 0.6rem; margin-top: 1.4rem; }
 .matchout__msg { margin: 0; font-size: 0.84rem; opacity: 0.75; }
 .match {
