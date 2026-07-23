@@ -19,16 +19,24 @@ on:
     - cron: "40 */6 * * *"
   workflow_dispatch: # manual run from the Actions tab
 
-# D1 free tier allows 100,000 rows written/day. One full sweep writes ~13,500
-# (measured), so ~7 sweeps/day is the ceiling. At 4/day this uses ~54k and
-# leaves headroom for the Worker cron and any manual runs.
+# WRITE QUOTA — the real constraint, and tighter than it looks.
 #
-# This is still a 19x freshness improvement: the Worker cron refreshes ONE board
-# per 6 hours (a ~5 day cycle for all 19); this refreshes ALL of them.
+# D1 free allows 100,000 rows written/day. One full sweep writes **20,052**
+# (measured 2026-07-23), not the ~13,500 the jobs table alone suggests: the FTS5
+# triggers write index rows on every upsert too, roughly +50%.
 #
-# To go more frequent, add change detection — only emit UPDATE for rows whose
-# JD hash actually changed. Most jobs are unchanged between runs, so writes
-# would collapse by an order of magnitude. Do that before shortening the cron.
+# At 4 runs/day that is ~80,200, plus the Worker cron's own board (~3k) — call
+# it 83% of quota. It works, but there is little headroom, and **adding boards
+# to worker/sources.js will push it over.** Symptoms would be a failed Apply
+# step, not silent corruption.
+#
+# Before adding boards or shortening this cron, add change detection: hash each
+# JD, skip the UPDATE when unchanged. Most postings do not change between runs,
+# so writes should fall by an order of magnitude — and it would also shrink the
+# window where D1 is unavailable while a 13 MB file is applied.
+#
+# Even so this is a 19x freshness win: the Worker cron refreshes ONE board per
+# 6 hours (a ~5 day cycle for all 19); this refreshes ALL of them.
 
 concurrency:
   group: sync-jobs
