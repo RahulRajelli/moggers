@@ -39,15 +39,35 @@ function relative(iso) {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
+/* What "the current search" means, defined once.
+ *
+ * The watcher saves exactly this object, so the thing being watched is the
+ * thing on screen. Two readers of the filter inputs would drift the first time
+ * one of them gained a control the other did not know about, and the failure
+ * would be invisible: the watch would quietly track a different search than the
+ * button that created it appeared to. */
+export function currentFilters() {
+  if (!el) return null;
+  const q = el.q.value.trim();
+  return {
+    q,
+    country: el.country.value,
+    company: el.company.value,
+    remote: el.remote.checked,
+    /* Only meaningful with a query, and it costs a Workers AI call — so never
+       send it for the unfiltered browse view. */
+    mode: el.semantic?.checked && q ? "semantic" : "keyword",
+  };
+}
+
 function query() {
+  const f = currentFilters();
   const p = new URLSearchParams();
-  if (el.q.value.trim()) p.set("q", el.q.value.trim());
-  if (el.country.value) p.set("country", el.country.value);
-  if (el.company.value) p.set("company", el.company.value);
-  if (el.remote.checked) p.set("remote", "1");
-  /* Only meaningful with a query, and it costs a Workers AI call — so never
-     send it for the unfiltered browse view. */
-  if (el.semantic?.checked && el.q.value.trim()) p.set("mode", "semantic");
+  if (f.q) p.set("q", f.q);
+  if (f.country) p.set("country", f.country);
+  if (f.company) p.set("company", f.company);
+  if (f.remote) p.set("remote", "1");
+  if (f.mode === "semantic") p.set("mode", "semantic");
   p.set("limit", String(PAGE));
   p.set("offset", String(offset));
   return p;
@@ -125,6 +145,12 @@ async function load({ append = false } = {}) {
   offset += (data.jobs || []).length;
   el.more.hidden = offset >= total || !(data.jobs || []).length;
   el.stat.textContent = total ? `${total} open right now.` : "";
+
+  /* The watcher's button label depends on whether what is on screen matches
+     what is saved ("watch this" vs "update watch"), so it needs to know when
+     the filters moved. An event rather than a direct call: the job list must
+     keep working if the watch module never loads. */
+  document.dispatchEvent(new CustomEvent("moggers:search", { detail: currentFilters() }));
 }
 
 async function loadFacets() {

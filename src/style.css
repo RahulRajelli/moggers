@@ -477,6 +477,47 @@ code { font-family: var(--mono); }
 }
 .jtag--remote { background: var(--ink); color: var(--paper); }
 .jtag--muted { border-color: transparent; opacity: 0.5; font-weight: 400; }
+.jtag--new { background: var(--acid); }
+
+/* ── the watcher ────────────────────────────────────────── */
+.watch { margin-bottom: 1.2rem; }
+.watch__bar {
+  display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
+  border: var(--rule); padding: 0.6rem 0.75rem; background: var(--paper);
+}
+.watch__go {
+  border: 2px solid var(--ink); background: var(--ink); color: var(--paper);
+  font-family: var(--mono); font-weight: 700; font-size: 0.75rem;
+  letter-spacing: 0.08em; padding: 0.5rem 0.8rem; cursor: pointer; white-space: nowrap;
+}
+.watch__go:hover:not(:disabled) { background: var(--acid); color: var(--ink); }
+.watch__go:disabled { opacity: 0.5; cursor: progress; }
+/* Already watching exactly what is on screen — the button is a state readout,
+   not an invitation to press it again. */
+.watch__go.is-on { background: var(--acid); color: var(--ink); }
+.watch__every {
+  border: 2px solid var(--ink); background: var(--paper); color: var(--ink);
+  font-family: var(--mono); font-size: 0.75rem; padding: 0.5rem 0.6rem;
+  appearance: none; border-radius: 0;
+}
+.watch__state { flex: 1 1 14rem; min-width: 0; font-size: 0.72rem; opacity: 0.65; }
+.watch__state.is-warn { opacity: 1; color: var(--alert); font-weight: 700; }
+.watch__mini {
+  border: none; background: none; padding: 0; cursor: pointer;
+  font-family: var(--mono); font-size: 0.7rem; text-decoration: underline;
+  text-underline-offset: 3px; opacity: 0.65; color: inherit;
+}
+.watch__mini:hover { opacity: 1; }
+
+.watch__fresh { border: var(--rule); border-top: none; padding: 0.85rem 0.75rem; background: var(--acid); }
+.watch__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 0.75rem; margin-bottom: 0.6rem;
+}
+.watch__count { font-family: var(--display); font-size: 0.9rem; letter-spacing: 0.04em; }
+/* Cards sit on the acid panel, so they need the paper background back or the
+   hover state (which is also acid) becomes invisible. */
+.watch__fresh .job { background: var(--paper); }
 
 .more {
   margin-top: 1.2rem; width: 100%;

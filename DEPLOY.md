@@ -160,7 +160,19 @@ These cannot be checked locally and must be done against production.
    and confirm **zero non-same-origin requests**. This is the claim the whole
    product rests on; check it on every deploy that touches the front end.
 
-5. **Cron.** After ~6 hours confirm a new `sync_log` row:
+5. **The watcher.** Sign in, set a watch, and check the response:
+   `"armed": 1` (the alarm is live) and `"fresh": []` (the baseline seeded, so
+   the user is not shown fifty roles they were already looking at). Then set the
+   interval to `6h` and watch one scheduled fire land:
+   ```bash
+   npx wrangler tail --format pretty
+   ```
+   Confirm `armed` is still 1 afterwards — `scheduleEvery()` re-arms itself, and
+   if it does not the watch silently becomes a one-shot with no other symptom.
+   **A Durable Object gets 30 s of CPU rather than 10 ms**, so a run should not
+   hit `1102` — but that assumption is precisely why it is worth watching once.
+
+6. **Cron.** After ~6 hours confirm a new `sync_log` row:
    ```bash
    npx wrangler d1 execute moggers --remote --command "SELECT * FROM sync_log ORDER BY ran_at DESC LIMIT 3"
    ```
@@ -189,10 +201,22 @@ npx wrangler rollback [deployment-id]
 Rollback reverts code only. It does **not** revert D1 schema changes, so any
 migration must be additive and backwards-compatible with the previous version.
 
+## Durable Objects: the migration is one-way
+
+`wrangler.toml` carries `[[migrations]] tag = "v1"` with
+`new_sqlite_classes = ["MoggerAgent"]`. Two rules:
+
+- **Never edit a migration that has been deployed** — add a new tag instead.
+- `new_sqlite_classes`, not `new_classes`. Only SQLite-backed Durable Objects
+  exist on the free plan; a key-value-backed class fails to provision.
+
+`npx wrangler rollback` reverts code, **not** a DO namespace. Rolling back past
+the deploy that introduced `MoggerAgent` leaves a Worker with no such class and
+a binding that cannot resolve, so roll forward instead.
+
 ## Not yet done
 
-- **Turnstile** on the future agent endpoint. Your wrangler token is currently
-  missing the `challenge-widgets.write` scope — run `wrangler login` again
-  before setting that up.
-- Workers AI + Vectorize bindings (the matching agent).
+- **Turnstile** on the AI endpoints. Your wrangler token is currently missing
+  the `challenge-widgets.write` scope — run `wrangler login` again before
+  setting that up.
 - Per-role pages for SEO.

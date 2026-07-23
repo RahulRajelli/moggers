@@ -212,6 +212,28 @@
       </label>
     </div>
 
+    <!-- ── THE WATCHER ──────────────────────────────────────
+         Saves the filters above and re-runs them on a schedule, then shows what
+         appeared since. Hidden until the module confirms the API is there, so
+         `vite dev` (no Worker) shows nothing rather than a dead button. -->
+    <div class="watch" id="watch" hidden>
+      <div class="watch__bar">
+        <button type="button" id="watchGo" class="watch__go">◉ WATCH THIS SEARCH</button>
+        <select id="watchEvery" class="watch__every" aria-label="How often to check" hidden></select>
+        <span class="watch__state" id="watchState"></span>
+        <button type="button" id="watchCheck" class="watch__mini" hidden>check now</button>
+        <button type="button" id="watchStop" class="watch__mini" hidden>stop</button>
+      </div>
+
+      <div class="watch__fresh" id="watchFresh" hidden>
+        <div class="watch__head">
+          <h3 class="watch__count" id="watchCount">NEW SINCE YOU LOOKED</h3>
+          <button type="button" id="watchAck" class="watch__mini">mark all seen</button>
+        </div>
+        <div class="joblist" id="watchList" aria-live="polite"></div>
+      </div>
+    </div>
+
     <div id="jobList" class="joblist" aria-live="polite"></div>
     <button type="button" id="jobMore" class="more" hidden>LOAD MORE</button>
   </section>

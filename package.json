@@ -13,6 +13,7 @@
   "dependencies": {
     "@fontsource/archivo-black": "^5.1.0",
     "@fontsource/jetbrains-mono": "^5.1.1",
+    "agents": "^0.18.0",
     "pdfjs-dist": "^4.7.76"
   },
   "devDependencies": {

@@ -55,28 +55,35 @@ const JD_CHARS = 600;            // per role, enough for requirements
  * The cap sits below the true ceiling so a burst cannot leave the rest of the
  * day dead for everyone else. */
 export const DAILY_NEURON_BUDGET = 8000;
-const NEURONS_PER_MATCH = 95;
+export const NEURONS_PER_MATCH = 95;
+
+/* One bge embedding and no generation — that is all a watcher run in semantic
+   mode costs. Metered anyway, against the same counter: the watcher runs
+   unattended, so it is the one caller that can quietly accumulate spend while
+   nobody is looking at the site. Two orders of magnitude cheaper than a match,
+   which is exactly why the diff must never call the generative model. */
+export const NEURONS_PER_WATCH = 2;
 
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
 /** Returns false when the day's budget is spent. Fails CLOSED. */
-export async function checkBudget(db) {
+export async function checkBudget(db, neurons = NEURONS_PER_MATCH) {
   const row = await db
     .prepare(`SELECT spent FROM ai_budget WHERE day = ?1`)
     .bind(today())
     .first();
-  return (row?.spent ?? 0) + NEURONS_PER_MATCH <= DAILY_NEURON_BUDGET;
+  return (row?.spent ?? 0) + neurons <= DAILY_NEURON_BUDGET;
 }
 
-export async function chargeBudget(db) {
+export async function chargeBudget(db, neurons = NEURONS_PER_MATCH) {
   await db
     .prepare(
       `INSERT INTO ai_budget (day, spent) VALUES (?1, ?2)
        ON CONFLICT(day) DO UPDATE SET spent = spent + ?2`
     )
-    .bind(today(), NEURONS_PER_MATCH)
+    .bind(today(), neurons)
     .run();
 }
 

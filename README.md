@@ -62,8 +62,9 @@ reset flow, no credential-stuffing defence to own.
 What is gated, and why it matters: **ATS X-Ray never asks who you are.** It is
 client-side, costs nothing to serve, and is the top of the funnel — gating it
 would trade the only real distribution advantage for nothing. Browsing roles is
-open too. An account buys exactly one thing today (saved roles) and later the
-matcher. *If a feature does not need identity, it must not sit behind sign-in.*
+open too. An account buys three things: saved roles, the matcher, and the
+watcher — all three of which genuinely *need* an identity to attach state or
+spend to. *If a feature does not need identity, it must not sit behind sign-in.*
 
 Design points that are load-bearing:
 
@@ -369,6 +370,133 @@ not a bug. Drive it deterministically instead:
 const a = document.getAnimations().find(x => x.animationName === 'specimen-scan');
 a.currentTime = 2300;  // expect inset(43% 0px) — a 14%-tall band at mid-height
 ```
+
+## The watcher (`worker/agent.js`, `worker/watch-core.js`, `src/watch.js`)
+
+A saved search that re-runs itself and reports what is new. One
+**Durable Object per signed-in user**, addressed by user id.
+
+The ingest already refreshes 19 boards every 6 hours and nobody was watching
+that stream on anyone's behalf. A job seeker does not want to come back and
+search; they want to be told when the role appears. It is the only feature here
+that gives anyone a reason to return.
+
+```
+POST   /api/watch        save the current filters + interval, seed the baseline
+GET    /api/watch        the watch and its pending roles
+POST   /api/watch/check  run it now
+POST   /api/watch/ack    mark the pending list read
+DELETE /api/watch        stop and forget
+```
+
+### A Durable Object gets 30 s of CPU, not 10 ms
+
+This is the whole reason the feature is shaped this way. **The 10 ms free-plan
+ceiling that broke the all-boards sweep does not apply inside a Durable
+Object** — each incoming request resets a 30-second budget. Anything CPU-bound
+that had to be sliced or exiled to `tools/seed.mjs` could move in here.
+Verified against the DO limits docs, 2026-07-23.
+
+`[[migrations]]` must use `new_sqlite_classes`: only SQLite-backed classes exist
+on the free plan, and the SDK keeps its state and schedule tables there anyway.
+
+### Four decisions that are load-bearing
+
+**The first run reports nothing.** `setWatch()` seeds `seen` with everything the
+search currently returns and announces none of it. The user is *looking at those
+results* — the button lives under them — so replaying fifty back as "new since
+you looked" would be both false and the fastest way to teach someone the feature
+is noise. Changing only the interval does **not** re-baseline, or switching
+daily→weekly would silently bin the roles they came back to read.
+
+**Current results are re-inserted at the FRONT of `seen` on every run**
+(`mergeSeen`). A plain append-and-truncate looks correct and produces a specific
+bug: a long-lived posting ages out of the 600-id window while still matching the
+search, and the next run announces a role the user dismissed weeks ago. Covered
+by `tests/security.test.js`.
+
+**The diff never calls the generative model.** Free tier is 8,000 neurons/day and
+a match costs ~95, so an LLM pass per user per day does not survive a second
+user. Retrieval only — Vectorize + D1. Semantic mode costs one embedding (~2
+neurons), metered against the same daily counter, and **downgrades to keyword
+rather than skipping the run** when the budget is gone: a keyword check finds
+most new arrivals, a refused one finds none. Charged on the way *out*, and only
+if `searchJobs` reports it really ran semantic — it falls back to FTS whenever
+Vectorize is unavailable, and billing on the way in paid for calls that never
+happened.
+
+**No email.** `moggers.in` MX points at GoDaddy with a `-all` SPF record, so
+sending from the domain means editing the record a real working mailbox depends
+on. Deferred deliberately, not forgotten.
+
+### `worker/search.js` exists because of this feature
+
+`ftsQuery`, the FTS/semantic paths and every filter moved out of `worker/index.js`
+so the watcher and the site run **the same query**. A watcher that disagrees
+with the site is worse than no watcher, because by then the user has stopped
+checking for themselves. `normalizeSearch()` accepts both `"1"` (query string)
+and `true` (JSON) so the route and the agent do not have to fake each other's
+shape.
+
+### Nothing about the agent is publicly addressable
+
+There is no `routeAgentRequest()` anywhere, and that is a **security decision**.
+The SDK's routing exposes `/agents/mogger-agent/<instance>`, and with user ids
+as instance names that is a URL for reading someone else's watch. The Worker
+resolves the session cookie first and calls `getAgentByName(env.MoggerAgent,
+user.id)` itself, so the instance name is never client-supplied and the session,
+`Origin` and rate-limit guards all still sit in front. `/api/watch/check` fails
+**closed** on the limiter, like `/api/match` — it does real work per call.
+
+### Three ways a schedule outlives its reason to exist
+
+All of them leave an alarm firing forever against a free-tier quota, and none
+would ever surface on their own:
+
+| Case | Handled by |
+|---|---|
+| Account deleted | `DELETE /api/account` tears the agent down; `runWatch()` re-checks that the user row exists as a backstop. **A Durable Object is not in D1's cascade** — nothing else stops it |
+| User never returns | Dormant after 60 days with no read; the schedule cancels itself and one press of *check now* resumes it |
+| Schedule lost or duplicated | Every response carries `armed`, the live alarm count. Anything but 1 while watching is a bug, and the UI says so instead of leaving it to a dashboard |
+
+`scheduleEvery()` is idempotent per *(callback, interval, payload)* — so a
+different interval creates a **new** schedule rather than replacing it.
+`setWatch()` cancels everything first; verified that daily→weekly→daily→weekly
+leaves `armed: 1`, not 4.
+
+### Bundle cost, measured
+
+Adding `agents` took the Worker from **14.66 KB to 334 KB gzipped** — 11% of the
+3 MB free-plan cap, so there is room, but it is a 20× jump from one import and
+worth knowing before adding another SDK. It also forces two config changes:
+
+- **`compatibility_flags = ["nodejs_compat"]`** is mandatory. `agents` pulls in
+  `mimetext` for email helpers this Worker never calls, and that reaches for
+  `node:os`/`node:path`. Without the flag the **build fails outright**.
+- **`npm install agents --legacy-peer-deps`.** The package declares an optional
+  peer on `vite >=6 <9`; this project pins vite 5 for the static build. The
+  conflict is spurious — the peer is only for `agents/vite`, which is never
+  imported — but plain `npm install` refuses it.
+
+Do **not** enable `experimentalDecorators` in a tsconfig here: it breaks
+`@callable`. This code needs no decorators at all, since the Worker calls the
+agent over RPC rather than the browser calling it over WebSocket.
+
+### Testing it locally
+
+Durable Objects and their alarms *do* work in `wrangler dev --local`, unlike the
+rate limiter and the CPU ceiling. Workers AI and Vectorize do not, so a semantic
+watch falls back to keyword there — which is itself worth exercising.
+
+```
+npx wrangler dev --port 4342 --local
+```
+
+Forge a session (see above), then drive the API with `curl`. The full local
+check that proved this build: create a watch (expect `fresh: []` and a non-zero
+`baseline`), `INSERT` a matching row into local D1, `POST /api/watch/check`
+(expect exactly that row), check again (expect **no** repeat), `ack`, check
+again (expect nothing).
 
 ## Sample fixture
 

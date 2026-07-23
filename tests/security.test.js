@@ -14,7 +14,13 @@ import { escapeHtml, safeUrl } from "../src/jobs.js";
 import { safeEqual, checkRate } from "../worker/security.js";
 import { normalizeLocation } from "../worker/normalize.js";
 import { toText, isRelevantTitle } from "../worker/sources.js";
-import { ftsQuery } from "../worker/index.js";
+/* From search.js, not index.js: the Worker entry now exports the Agent class,
+   which imports `cloudflare:workers` — a module vitest cannot resolve, so
+   importing index.js here would take the whole suite down. */
+import { ftsQuery, normalizeSearch } from "../worker/search.js";
+import {
+  mergeSeen, mergeFresh, newArrivals, isUsableWatch, normalizeInterval, MAX_SEEN,
+} from "../worker/watch-core.js";
 
 describe("escapeHtml", () => {
   it("neutralises tag injection", () => {
@@ -206,6 +212,107 @@ describe("ftsQuery", () => {
   it("caps token count so a long paste cannot build a huge query", () => {
     const many = ftsQuery("a b c d e f g h i j k l m n o p");
     expect(many.split(" AND ")).toHaveLength(8);
+  });
+});
+
+/* The watcher's failure modes are all silent, which is why they are here rather
+   than trusted to review: a bad eviction order re-announces roles the user
+   already dismissed, a bad diff announces nothing and the feature just looks
+   dead, and an unfiltered watch quietly reads the whole board every run. None
+   of it throws. */
+describe("mergeSeen", () => {
+  it("keeps current results at the FRONT so they can never be evicted", () => {
+    /* The bug this exists to stop: a long-lived posting ages out of a
+       FIFO window while still matching the search, and the next run reports it
+       as brand new. */
+    const old = Array.from({ length: MAX_SEEN }, (_, i) => `old-${i}`);
+    const merged = mergeSeen(["still-listed"], old);
+    expect(merged[0]).toBe("still-listed");
+    expect(merged).toHaveLength(MAX_SEEN);
+    expect(merged).not.toContain(`old-${MAX_SEEN - 1}`); // the oldest went, not the live one
+  });
+
+  it("de-duplicates rather than growing on every run", () => {
+    expect(mergeSeen(["a", "b"], ["b", "c"])).toEqual(["a", "b", "c"]);
+  });
+
+  it("survives an empty run without discarding history", () => {
+    expect(mergeSeen([], ["a", "b"])).toEqual(["a", "b"]);
+  });
+});
+
+describe("newArrivals", () => {
+  it("returns only ids not already shown", () => {
+    const jobs = [{ id: "a" }, { id: "b" }, { id: "c" }];
+    expect(newArrivals(jobs, ["b"]).map((j) => j.id)).toEqual(["a", "c"]);
+  });
+
+  it("returns nothing when everything is known — the quiet case must stay quiet", () => {
+    expect(newArrivals([{ id: "a" }], ["a"])).toEqual([]);
+  });
+
+  it("ignores rows with no id rather than announcing undefined", () => {
+    expect(newArrivals([{ id: null }, { id: "a" }], [])).toHaveLength(1);
+  });
+});
+
+describe("mergeFresh", () => {
+  it("puts new finds first and drops repeats of the same role", () => {
+    const out = mergeFresh([{ id: "new" }, { id: "old" }], [{ id: "old" }]);
+    expect(out.map((e) => e.id)).toEqual(["new", "old"]);
+  });
+
+  it("caps the backlog so an ignored watch cannot grow unbounded", () => {
+    const many = Array.from({ length: 100 }, (_, i) => ({ id: `j${i}` }));
+    expect(mergeFresh(many, [], 40)).toHaveLength(40);
+  });
+});
+
+describe("isUsableWatch", () => {
+  it("rejects a watch with no query and no filters — that is the whole board", () => {
+    expect(isUsableWatch(normalizeSearch({}))).toBe(false);
+    expect(isUsableWatch(normalizeSearch({ mode: "semantic" }))).toBe(false);
+  });
+
+  it("accepts any single narrowing term", () => {
+    expect(isUsableWatch(normalizeSearch({ q: "perception" }))).toBe(true);
+    expect(isUsableWatch(normalizeSearch({ country: "India" }))).toBe(true);
+    expect(isUsableWatch(normalizeSearch({ remote: "1" }))).toBe(true);
+  });
+});
+
+describe("normalizeInterval", () => {
+  it("falls back to the default rather than accepting an arbitrary number", () => {
+    // A client-supplied interval reaches scheduleEvery(); "60" would be a
+    // per-minute alarm on a board that changes every 6 hours.
+    expect(normalizeInterval("60")).toBe("daily");
+    expect(normalizeInterval(undefined)).toBe("daily");
+    expect(normalizeInterval("toString")).toBe("daily"); // not an inherited key
+    expect(normalizeInterval("weekly")).toBe("weekly");
+  });
+});
+
+describe("normalizeSearch", () => {
+  it("reads '1' from a query string and true from JSON as the same thing", () => {
+    expect(normalizeSearch({ remote: "1" }).remote).toBe(true);
+    expect(normalizeSearch({ remote: true }).remote).toBe(true);
+    expect(normalizeSearch({ remote: "0" }).remote).toBe(false);
+  });
+
+  it("excludes thin JDs unless explicitly asked for", () => {
+    expect(normalizeSearch({}).includeThin).toBe(false);
+    expect(normalizeSearch({ thin: "1" }).includeThin).toBe(true);
+  });
+
+  it("only honours the semantic opt-in, never guesses it", () => {
+    expect(normalizeSearch({ mode: "semantic" }).mode).toBe("semantic");
+    expect(normalizeSearch({ mode: "SEMANTIC" }).mode).toBe("keyword");
+    expect(normalizeSearch({}).mode).toBe("keyword");
+  });
+
+  it("clamps limit so a saved search cannot ask for the corpus", () => {
+    expect(normalizeSearch({ limit: "9999" }).limit).toBe(200);
+    expect(normalizeSearch({ limit: "-5" }).limit).toBe(50);
   });
 });
 

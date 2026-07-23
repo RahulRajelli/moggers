@@ -2,6 +2,13 @@ name = "moggers"
 main = "worker/index.js"
 compatibility_date = "2026-07-01"
 
+# Required by the Agents SDK, not by anything this project wrote: `agents` pulls
+# in mimetext (for its email helpers, which this Worker never calls) and that
+# reaches for node:os and node:path. Without the flag the BUILD fails outright —
+# "Could not resolve path" — so this is not a runtime nicety, it is the price of
+# the SDK. Safe here: the flag only adds Node built-ins, it removes nothing.
+compatibility_flags = ["nodejs_compat"]
+
 # No *.workers.dev URL. The site is reachable at moggers.in or not at all —
 # which also means there is no second origin for OAuth callbacks to mismatch.
 workers_dev = false
@@ -90,6 +97,26 @@ namespace_id = "1001"
 # Six-hourly. ATS boards do not change fast enough to justify more, and each
 # sweep costs ~19 subrequests.
 crons = ["17 */6 * * *"]
+
+# ── the watcher (Agents SDK) ───────────────────────────────────────────────
+# One Durable Object per signed-in user, addressed by user id.
+#
+# THE REASON THIS EXISTS AT ALL: a Durable Object gets 30 SECONDS of CPU per
+# request, not the 10 ms a free-plan Worker gets. Everything that had to be
+# sliced or exiled to CI because of that ceiling can run whole in here.
+[[durable_objects.bindings]]
+name = "MoggerAgent"
+class_name = "MoggerAgent"
+
+# SQLITE-BACKED, and not optional: only `new_sqlite_classes` is available on the
+# free plan — a key-value-backed class fails to provision. The Agents SDK also
+# stores its own state and schedule tables in the DO's SQLite, so this is the
+# only variant it supports anyway.
+#
+# Never edit a migration that has been deployed; add a new tag instead.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MoggerAgent"]
 
 [observability]
 enabled = true

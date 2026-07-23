@@ -367,6 +367,10 @@ import("./auth.js")
   .finally(() => {
     import("./jobs.js")
       .then(({ initJobs }) => initJobs())
+      /* The watcher sits inside the job section and saves the same filters, so
+         it only makes sense once that section is up. It removes itself if the
+         /api/watch endpoint is not there. */
+      .then(() => import("./watch.js").then(({ initWatch }) => initWatch()))
       .catch((err) => console.warn("job index unavailable:", err));
     /* The matcher needs the same Worker backend. It reveals itself only if the
        module loads, so `vite dev` (no API) shows nothing rather than a button

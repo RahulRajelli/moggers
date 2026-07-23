@@ -11,8 +11,14 @@ import {
 import {
   PROVIDERS, startLogin, completeLogin, currentUser, logout, deleteAccount, purgeExpired,
 } from "./auth.js";
-import { indexJobs, semanticSearch, EMBED_MODEL, EMBED_DIMS, BATCH } from "./embed.js";
+import { indexJobs, EMBED_MODEL, EMBED_DIMS, BATCH } from "./embed.js";
 import { matchResume, checkBudget, chargeBudget, DAILY_NEURON_BUDGET } from "./match.js";
+import { searchJobs } from "./search.js";
+import { getAgentByName } from "agents";
+
+/* The Durable Object class must be exported from the Worker's entry point or
+   the binding cannot resolve it ("Namespace not found"). */
+export { MoggerAgent } from "./agent.js";
 
 /* SameSite=Lax already withholds the session cookie from cross-site POSTs, so
    this is belt-and-braces — but it is two lines and it closes the gap for any
@@ -41,173 +47,6 @@ const json = (data, status = 200, cache) =>
 
 
 /* ── API ──────────────────────────────────────────────────────────────── */
-
-/* Turn user input into an FTS5 MATCH expression.
- *
- * FTS5 query syntax is a real grammar: bare `"`, `*`, `-`, `NEAR`, `AND`/`OR`
- * and unbalanced parens all raise SQLITE_ERROR, which would surface as a 500 on
- * a typo. So every token is quoted as a literal — quoting is also what makes
- * `c++` and `ROS2` searchable rather than parse errors.
- *
- * Prefix-matching the final token ("robot" → "robot"*) makes search feel live
- * as the user types, which is how the debounced input actually behaves. */
-export function ftsQuery(raw) {
-  const tokens = String(raw)
-    .toLowerCase()
-    .split(/[^\p{L}\p{N}+#.]+/u)
-    /* Strip trailing punctuation the unicode61 tokenizer discards anyway, so
-       "c++" searches for the indexed token "c" rather than the literal "c++",
-       which matches nothing. Keep 1-char results: dropping them turned "c++"
-       into an empty token list. */
-    .map((t) => t.replace(/[+#.]+$/g, ""))
-    .filter(Boolean)
-    .slice(0, 8); // a 40-word paste should not become a 40-clause query
-  if (!tokens.length) return "";
-  const quoted = tokens.map((t) => `"${t.replace(/"/g, '""')}"`);
-  /* Prefix only the final token, and only when it is long enough to be
-     selective — a 2-char prefix like "ai"* matches half the index and drowns
-     the ranking. */
-  const last = quoted.length - 1;
-  if (tokens[last].length >= 3) quoted[last] += "*";
-  return quoted.join(" AND ");
-}
-
-/* Semantic path: Vectorize gives ranked ids, D1 supplies every displayable
-   field and applies the same filters and de-duplication as keyword search.
-   Vectorize stores only ids, so there is one source of truth and the index can
-   never serve a stale title. */
-async function listJobsSemantic(env, url, query) {
-  const p = url.searchParams;
-  const limit = Math.min(parseInt(p.get("limit") || "50", 10) || 50, 200);
-  const offset = Math.max(parseInt(p.get("offset") || "0", 10) || 0, 0);
-
-  /* Over-fetch to the cap: filters are applied AFTER ranking, so a narrow
-     filter can leave few survivors. 100 is Vectorize's hard maximum. */
-  const ranked = await semanticSearch(env, query, { topK: 100 });
-  if (!ranked.length) return { jobs: [], total: 0, limit, offset, mode: "semantic" };
-
-  const rank = new Map(ranked.map((r, i) => [r.id, { i, score: r.score }]));
-  const ids = ranked.map((r) => r.id);
-
-  const where = ["j.active = 1", `j.id IN (${ids.map(() => "?").join(",")})`];
-  const binds = [...ids];
-  const bind = (v) => { binds.push(v); return "?"; };
-
-  const country = (p.get("country") || "").trim();
-  if (country) where.push(`j.country = ${bind(country)}`);
-  const company = (p.get("company") || "").trim();
-  if (company) where.push(`j.company = ${bind(company)}`);
-  if (p.get("remote") === "1") where.push("j.remote = 1");
-  if (p.get("thin") !== "1") where.push("j.thin = 0");
-
-  const rows = await env.DB.prepare(
-    `SELECT j.id, j.company, j.title, j.url, j.location, j.location_raw,
-            j.country, j.remote, j.jd_chars, j.first_seen,
-            MAX(COALESCE(j.posted_at, j.first_seen)) AS posted_at,
-            COUNT(*) AS listings
-     FROM jobs j WHERE ${where.join(" AND ")}
-     GROUP BY j.dedup_key`
-  ).bind(...binds).all();
-
-  /* Restore Vectorize's ordering — SQL returned rows in arbitrary order, and
-     the whole point of this path is the ranking. */
-  const all = (rows.results || [])
-    .map((r) => ({ ...r, _score: rank.get(r.id)?.score ?? 0, _i: rank.get(r.id)?.i ?? 1e9 }))
-    .sort((a, b) => a._i - b._i);
-
-  return {
-    jobs: all.slice(offset, offset + limit).map(({ _i, _score, ...j }) => ({ ...j, score: _score })),
-    total: all.length,
-    limit, offset, mode: "semantic",
-  };
-}
-
-async function listJobs(db, url) {
-  const p = url.searchParams;
-  const where = ["j.active = 1"];
-  const binds = [];
-  const bind = (v) => {
-    binds.push(v);
-    return `?${binds.length}`;
-  };
-
-  /* FTS5 replaces `jd LIKE '%q%'`, which could not use an index and scanned
-     every row's 6 kB blob. Joining against the external-content index turns it
-     into an inverted-index lookup, and gives BM25 relevance ordering for free. */
-  const limit = Math.min(parseInt(p.get("limit") || "50", 10) || 50, 200);
-  const offset = Math.max(parseInt(p.get("offset") || "0", 10) || 0, 0);
-
-  const q = (p.get("q") || "").trim();
-  const match = q ? ftsQuery(q) : null;
-
-  /* A search that reduces to nothing usable must return NOTHING, not the whole
-     corpus. Falling through to an unfiltered query is the worst possible
-     answer: "c++" briefly returned all 5,103 rows because its tokens were
-     stripped to empty and the search was silently dropped. */
-  if (match === "") return { jobs: [], total: 0, limit, offset };
-
-  const from = match
-    ? `jobs j JOIN jobs_fts f ON f.rowid = j.rowid AND jobs_fts MATCH ${bind(match)}`
-    : `jobs j`;
-
-  const country = (p.get("country") || "").trim();
-  if (country) where.push(`j.country = ${bind(country)}`);
-
-  const company = (p.get("company") || "").trim();
-  if (company) where.push(`j.company = ${bind(company)}`);
-
-  if (p.get("remote") === "1") where.push("j.remote = 1");
-  // Thin JDs inflate every keyword score, so they are excluded by default.
-  if (p.get("thin") !== "1") where.push("j.thin = 0");
-
-  /* Collapse duplicate postings of the same role. `dedup_key` is now stored and
-     indexed rather than built per query — companies really do double-post a req
-     (Anthropic had one London role under two Greenhouse ids). Different CITIES
-     stay separate: one role open in four cities is four jobs.
-
-     Grouped, never deleted: every row stays in the table, so a bad grouping is
-     visible and reversible. SQLite resolves the bare columns from the row that
-     produced MAX(), so the surviving link is the freshest one. */
-  const group = `GROUP BY j.dedup_key`;
-
-  /* Relevance when searching, recency when browsing. MIN(rank) because bm25
-     returns NEGATIVE scores — more negative is a better match, so ascending is
-     correct and MAX() would rank the worst hit first. */
-  const order = match
-    ? `ORDER BY MIN(f.rank) ASC, posted_at DESC`
-    : `ORDER BY posted_at DESC`;
-
-  const sql = `
-    SELECT j.id, j.company, j.title, j.url, j.location, j.location_raw,
-           j.country, j.remote, j.jd_chars, j.first_seen,
-           MAX(COALESCE(j.posted_at, j.first_seen)) AS posted_at,
-           COUNT(*) AS listings
-    FROM ${from}
-    WHERE ${where.join(" AND ")}
-    ${group}
-    ${order}
-    LIMIT ${limit} OFFSET ${offset}`;
-
-  const countSql = `
-    SELECT COUNT(*) AS n FROM (
-      SELECT 1 FROM ${from} WHERE ${where.join(" AND ")} ${group}
-    )`;
-
-  try {
-    const [rows, total] = await Promise.all([
-      db.prepare(sql).bind(...binds).all(),
-      db.prepare(countSql).bind(...binds).first(),
-    ]);
-    return { jobs: rows.results || [], total: total?.n ?? 0, limit, offset };
-  } catch (err) {
-    /* A malformed MATCH is user input, not a server fault — report it as an
-       empty result rather than a 500. */
-    if (match && /fts5|MATCH|syntax/i.test(String(err))) {
-      return { jobs: [], total: 0, limit, offset };
-    }
-    throw err;
-  }
-}
 
 /* Read the precomputed tables — two indexed scans over a few dozen rows instead
    of COUNT(DISTINCT ...) over the whole corpus on every page load. Written by
@@ -409,20 +248,15 @@ export default {
 
     try {
       if (url.pathname === "/api/jobs") {
-        /* Semantic is opt-in per request. It costs a Workers AI call (10k
-           Neurons/day), so it must never be the default for crawlers or the
-           unfiltered browse view — which is also why it only runs when there
-           is an actual query. Falls back to FTS on any failure rather than
-           erroring: a degraded search beats no search. */
-        const q = (url.searchParams.get("q") || "").trim();
-        if (q && url.searchParams.get("mode") === "semantic" && env.AI && env.VECTORIZE) {
-          try {
-            return json(await listJobsSemantic(env, url, q), 200, READ_CACHE);
-          } catch (err) {
-            console.error("semantic search failed, falling back to fts", err);
-          }
-        }
-        return json(await listJobs(env.DB, url), 200, READ_CACHE);
+        /* One search implementation, shared with the watcher — see search.js.
+           Mode selection, the semantic-to-FTS fallback and every filter live in
+           there now, so the scheduled check and this endpoint cannot disagree
+           about what a saved search means. */
+        return json(
+          await searchJobs(env, Object.fromEntries(url.searchParams)),
+          200,
+          READ_CACHE
+        );
       }
 
       if (url.pathname === "/api/facets") {
@@ -472,6 +306,59 @@ export default {
             `INSERT OR IGNORE INTO saved_jobs (user_id, job_id, saved_at) VALUES (?1,?2,?3)`
           ).bind(user.id, jobId, new Date().toISOString()).run();
           return json({ saved: true });
+        }
+
+        return json({ error: "method not allowed" }, 405);
+      }
+
+      /* ── the watcher ─────────────────────────────────────────────────
+         A Durable Object per user, addressed by SESSION, never by a name the
+         client supplies. This is why there is no routeAgentRequest anywhere in
+         this file: the SDK's own routing exposes /agents/<class>/<instance>,
+         and with user ids as instance names that is a URL for reading someone
+         else's watch. Resolving the cookie first and calling getAgentByName
+         ourselves keeps the agent unaddressable from outside and leaves every
+         existing guard in front of it. */
+      if (url.pathname === "/api/watch" || url.pathname.startsWith("/api/watch/")) {
+        const user = await currentUser(env.DB, request);
+        if (!user) return json({ error: "sign in required" }, 401);
+        if (!env.MoggerAgent) return json({ error: "watcher unavailable" }, 503);
+
+        const action = url.pathname.slice("/api/watch".length).replace(/^\//, "");
+        const mutating = request.method !== "GET";
+        if (mutating && !sameOrigin(request, url)) return json({ error: "bad origin" }, 403);
+
+        const agent = await getAgentByName(env.MoggerAgent, user.id);
+
+        if (!action && request.method === "GET") {
+          return json(await agent.snapshot(user.id));
+        }
+
+        if (!action && request.method === "POST") {
+          const body = await request.json().catch(() => ({}));
+          const result = await agent.setWatch({
+            userId: user.id,
+            search: body?.search || {},
+            interval: body?.interval,
+          });
+          return json(result, result.error ? 400 : 200);
+        }
+
+        if (!action && request.method === "DELETE") {
+          return json(await agent.clearWatch());
+        }
+
+        if (action === "ack" && request.method === "POST") {
+          return json(await agent.ack());
+        }
+
+        /* An on-demand check runs a real search and, in semantic mode, a real
+           embedding — so unlike the read endpoints this fails CLOSED. A missing
+           limiter must not mean unmetered board reads. */
+        if (action === "check" && request.method === "POST") {
+          const burst = await checkRate(env.API_LIMITER, `watch:${user.id}`, { failClosed: true });
+          if (!burst.ok) return json({ error: "too many requests — wait a minute" }, 429);
+          return json(await agent.checkNow());
         }
 
         return json({ error: "method not allowed" }, 405);
@@ -549,6 +436,21 @@ export default {
         if (!sameOrigin(request, url)) return json({ error: "bad origin" }, 403);
         const user = await currentUser(env.DB, request);
         if (!user) return json({ error: "sign in required" }, 401);
+
+        /* The watcher is a Durable Object, so it is NOT in the D1 cascade that
+           removes sessions and saved roles — nothing about deleting the user
+           row stops its alarm. Cancel it here. runWatch() re-checks that the
+           account exists as a backstop, but that only fires on the next
+           schedule, and "deleted" should mean deleted now. */
+        if (env.MoggerAgent) {
+          try {
+            const agent = await getAgentByName(env.MoggerAgent, user.id);
+            await agent.clearWatch();
+          } catch (err) {
+            console.error("watch teardown on delete failed", err);
+          }
+        }
+
         await deleteAccount(env.DB, user.id);
         return withSecurity(
           new Response(JSON.stringify({ deleted: true }), {
