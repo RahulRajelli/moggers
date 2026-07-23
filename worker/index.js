@@ -4,7 +4,9 @@
  * carry a cron trigger, and splitting them means two deploys sharing one D1.
  */
 import { BOARDS, fetchBoard } from "./sources.js";
-import { normalizeJob } from "./normalize.js";
+import {
+  normalizeJob, hoursAgo, REFRESH_AFTER_HOURS, CLOSE_AFTER_HOURS,
+} from "./normalize.js";
 import {
   withSecurity, READ_CACHE, clientKey, checkRate, tooManyRequests, safeEqual,
 } from "./security.js";
@@ -114,6 +116,11 @@ export async function sync(db, only = null) {
   const errors = results.filter((r) => r.error).map((r) => `${r.board.token}: ${r.error}`);
   const jobs = results.flatMap((r) => r.rows.map((row) => normalizeJob(row, r.board)));
 
+  /* The two clocks that keep this sweep inside the D1 write quota — see the
+     block above REFRESH_AFTER_HOURS in normalize.js for why they are apart. */
+  const refreshBefore = hoursAgo(REFRESH_AFTER_HOURS);
+  const closeBefore = hoursAgo(CLOSE_AFTER_HOURS);
+
   const seen = new Set();
   const statements = [];
   for (const j of jobs) {
@@ -127,28 +134,48 @@ export async function sync(db, only = null) {
              and silently stops collapsing with its twin. */
           `INSERT INTO jobs (id, source, company, title, url, location_raw, location,
                              country, remote, jd, jd_chars, thin, posted_at,
-                             first_seen, last_seen, active, dedup_key)
+                             first_seen, last_seen, active, dedup_key, jd_hash)
            VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?14,1,
-                   ?3 || '|' || ?4 || '|' || COALESCE(?7, ''))
+                   ?3 || '|' || ?4 || '|' || COALESCE(?7, ''), ?15)
            ON CONFLICT(id) DO UPDATE SET
              title = excluded.title, url = excluded.url,
              location_raw = excluded.location_raw, location = excluded.location,
              country = excluded.country, remote = excluded.remote,
              jd = excluded.jd, jd_chars = excluded.jd_chars, thin = excluded.thin,
              posted_at = excluded.posted_at, last_seen = excluded.last_seen,
-             active = 1, dedup_key = excluded.dedup_key`
+             active = 1, dedup_key = excluded.dedup_key, jd_hash = excluded.jd_hash
+           /* THE WRITE-QUOTA CLAUSE. Without it every sweep rewrites every row
+              to record that nothing happened, and the FTS triggers turn each of
+              those into several more. Three reasons to write, and all three are
+              load-bearing:
+
+                1. the posting changed — the only interesting case;
+                2. it was closed and has come back, which a content-only test
+                   would miss entirely, leaving a live repost invisible forever;
+                3. its heartbeat is due, so closure detection keeps working.
+
+              A row matching none of them is left completely untouched, which is
+              the point. */
+           WHERE jobs.jd_hash IS NOT excluded.jd_hash
+              OR jobs.active = 0
+              OR jobs.last_seen < ?16`
         )
         .bind(
           j.id, j.source, j.company, j.title, j.url, j.location_raw, j.location,
-          j.country, j.remote, j.jd, j.jd_chars, j.thin, j.posted_at, now
+          j.country, j.remote, j.jd, j.jd_chars, j.thin, j.posted_at, now,
+          j.jd_hash, refreshBefore
         )
     );
   }
 
   if (statements.length) await db.batch(statements);
 
-  /* Anything not seen in this sweep of a board that DID respond is closed.
-     Scoped per source so one failing board never mass-closes its own jobs. */
+  /* A posting is closed when it stops appearing in its own board feed. Now
+     measured against a 48h cutoff rather than this sweep's timestamp, because
+     last_seen is only refreshed every ~20h — comparing against `now` would
+     close every row whose heartbeat simply was not due yet, which is the entire
+     live corpus. Scoped per source so one failing board cannot mass-close its
+     own jobs. */
   const healthy = results.filter((r) => !r.error).map((r) => `${r.board.ats}:${r.board.token}`);
   const seenTotal = results.reduce((n, r) => n + (r.seen || 0), 0);
   let closed = 0;
@@ -159,7 +186,7 @@ export async function sync(db, only = null) {
         `UPDATE jobs SET active = 0
          WHERE active = 1 AND last_seen < ?1 AND source IN (${placeholders})`
       )
-      .bind(now, ...healthy)
+      .bind(closeBefore, ...healthy)
       .run();
     closed = res.meta?.changes ?? 0;
   }

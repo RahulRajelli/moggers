@@ -179,6 +179,85 @@ Three consequences, all load-bearing:
 **Workers Paid ($5/mo) raises cron CPU to 30 s**, at which point items 1 and 2
 can revert to a full sweep. Until then this is the shape.
 
+### The write quota — read before adding a board (`migrations/0004`)
+
+**D1 free allows 100,000 rows written/day, and the ingest was using 83% of it to
+record that almost nothing had changed.**
+
+One full 19-board sweep wrote **20,052** rows. Only ~13,500 were `jobs` rows;
+the rest came from the FTS5 triggers, which re-indexed every posting on every
+upsert. Four sweeps a day plus the Worker cron's own board left no headroom at
+all — adding a single board would have pushed it over, which is why every
+"more roles" plan was blocked on this.
+
+Two changes, and they are independent:
+
+**1. Only re-index when the indexed text changed.** `jobs_fts` covers exactly
+`title`, `company`, `jd`. The trigger now carries a `WHEN` clause testing those
+three, so a `last_seen` bump no longer rewrites the inverted index. Use
+**`IS NOT`, never `<>`** — `old.jd <> new.jd` is NULL when either side is NULL
+and a NULL `WHEN` is false, so a JD first appearing on a posting that had none
+would silently never be indexed.
+
+**2. Skip the write entirely when nothing changed.** Every posting carries an
+FNV-1a hash (`jobHash()` in `worker/normalize.js`) of every column the upsert
+writes, and the upsert's `WHERE` gives three reasons to write:
+
+```sql
+WHERE jobs.jd_hash IS NOT excluded.jd_hash   -- content changed
+   OR jobs.active = 0                        -- a closed posting is back
+   OR jobs.last_seen < <20h ago>             -- heartbeat due
+```
+
+The middle clause is easy to leave out and expensive to omit: a role that closes
+and is reposted unchanged would stay invisible forever.
+
+**`jobHash`'s field list is the contract.** Miss a column the upsert writes and a
+real change to it never triggers a write — the stored row keeps a stale value
+indefinitely, with nothing reporting it. Covered by `tests/security.test.js`.
+Fields are joined on U+001F rather than a space, so a title ending in one token
+and a URL starting with another cannot hash identically to that token having
+moved across the boundary.
+
+#### The two clocks, and why they must not cross
+
+Skipping unchanged writes only works if `last_seen` stops being bumped every
+sweep — but closure detection *is* `last_seen`. So the heartbeat got a slower
+clock: refresh at **20h**, close at **48h**.
+
+The gap is the entire safety design. A row is refreshed at worst 20 + 6 = **26h**
+after its last bump and not closed until **48h** — 22 hours, three and a half
+missed sweeps, of slack. Narrowing it risks closing live roles and emptying the
+site; widening it only delays a dead posting disappearing. The failure modes are
+not symmetric, so err wide. A test asserts they cannot cross.
+
+**Closure had to move into `tools/seed.mjs`.** It previously lived only in the
+Worker's `sync()`, which sweeps one board per run — fine when this sweep bumped
+every row every six hours, useless once it stopped, because a pulled role would
+wait out the ~5-day board rotation. The seeder now emits the closure statement
+for every board that responded.
+
+The cost: a role pulled from a feed disappears here within about a day rather
+than six hours. For postings that live for weeks, that buys 4× the write
+headroom.
+
+#### Verified locally, with a probe
+
+`rows_written` is not reported by local D1, so the behaviour was proven with a
+counter table and two triggers mirroring the real `WHEN` clause:
+
+| Case | Rows written | Index writes |
+|---|---|---|
+| First sweep after the migration (`jd_hash` NULL) | 25 | **0** |
+| Same content again | **0** | **0** |
+| Title changed | 1 | 1 |
+| Closed posting reappears | 1 | 1 (and `active` back to 1) |
+| Heartbeat overdue | 1 | 0 |
+
+`INSERT INTO jobs_fts(jobs_fts) VALUES('integrity-check')` passes afterwards —
+worth re-running after anything that touches the triggers, since a corrupt
+external-content index fails silently on reads.
+
 ### The title filter (`isRelevantTitle` in `worker/sources.js`)
 
 Does two jobs, and the second is why it is not optional.
@@ -309,7 +388,9 @@ Three behaviours worth knowing:
 - **Closure detection.** A posting is closed when it stops appearing in its own
   board feed — far better than re-requesting the URL, since boards return HTTP
   200 on an expired posting and redirect to a "create a job alert" page. Scoped
-  per source, so one failing board can never mass-close its own jobs.
+  per source, so one failing board can never mass-close its own jobs. Since
+  change detection landed it resolves within about a day rather than six hours;
+  see below for why that trade was worth making.
 - **De-duplication happens at query time**, not on write: `GROUP BY company,
   title, location`, mirroring `dedup_jobs` in the tracker. Companies really do
   double-post (Anthropic had one London role under two Greenhouse ids). Every

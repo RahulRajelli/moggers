@@ -98,7 +98,7 @@ export const MIN_JD_CHARS = 1500;
 export function normalizeJob(row, board) {
   const loc = normalizeLocation(row.location_raw, row.remote_flag);
   const jd = (row.jd || "").slice(0, 20000);
-  return {
+  const job = {
     id: `${board.ats}:${board.token}:${row.external_id}`,
     source: `${board.ats}:${board.token}`,
     company: row.company,
@@ -110,4 +110,69 @@ export function normalizeJob(row, board) {
     thin: jd.length < MIN_JD_CHARS ? 1 : 0,
     posted_at: row.posted_at,
   };
+  return { ...job, jd_hash: jobHash(job) };
+}
+
+/* ── the two windows that make change detection safe ──────────────────────
+ *
+ * Skipping the write for an unchanged posting is only half the saving: the
+ * upsert still has to bump `last_seen`, because closure detection is "this
+ * posting stopped appearing in its own board feed" and last_seen is how that
+ * is measured. Bumping it every sweep means writing every row every sweep,
+ * which is the cost we are trying to avoid.
+ *
+ * So the heartbeat gets its own, slower clock. A row is refreshed only once it
+ * is REFRESH_AFTER_HOURS stale, and closed only once it is CLOSE_AFTER_HOURS
+ * stale. At a 6-hourly sweep that means one write per row per day instead of
+ * four, and the gap between the two numbers is pure safety margin.
+ *
+ * THE MARGIN IS THE WHOLE DESIGN. A row is refreshed at latest 20 + 6 = 26h
+ * after its last bump, and not closed until 48h — 22 hours, or three and a
+ * half missed sweeps, of slack. Narrowing that gap risks closing live roles,
+ * which empties the site; widening it only delays a dead posting disappearing.
+ * The two failure modes are not remotely symmetric, so err wide.
+ *
+ * The cost is that a role pulled from a board now vanishes here within about a
+ * day rather than within six hours. For postings that live for weeks that is a
+ * fair trade for 4x the write headroom.
+ */
+export const REFRESH_AFTER_HOURS = 20;
+export const CLOSE_AFTER_HOURS = 48;
+
+export const hoursAgo = (h, from = Date.now()) =>
+  new Date(from - h * 3600_000).toISOString();
+
+/* Change detection for the ingest sweep.
+ *
+ * THE FIELD LIST IS THE CONTRACT: it must cover every column the upsert's
+ * DO UPDATE writes, or a change to a missing one is invisible and the stored
+ * row silently keeps a stale value forever. `last_seen` and `active` are
+ * deliberately absent — those change on every sweep by design and are handled
+ * separately, which is the entire point of hashing the rest.
+ *
+ * FNV-1a, not SHA-256: this runs once per posting per sweep and Web Crypto's
+ * digest is async, which would turn a tight synchronous loop over thousands of
+ * rows into thousands of awaited promises. Collisions here cost a missed
+ * update on one posting until its next real change, not corruption — a 32-bit
+ * hash is the right size for that risk.
+ */
+/* ASCII unit separator (U+001F). Not a space: toText() strips control
+   characters from every JD, so no field value can contain this one and bleed
+   into its neighbour. Joined on a space, a title ending in one token and a URL
+   beginning with another would hash identically to that token having moved
+   across the boundary. */
+const FIELD_SEP = String.fromCharCode(31);
+
+export function jobHash(job) {
+  const material = [
+    job.company, job.title, job.url, job.location_raw, job.location,
+    job.country, job.remote, job.jd_chars, job.thin, job.posted_at, job.jd,
+  ].join(FIELD_SEP);
+
+  let h = 0x811c9dc5;
+  for (let i = 0; i < material.length; i++) {
+    h ^= material.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
 }

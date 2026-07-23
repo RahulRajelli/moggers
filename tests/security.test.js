@@ -12,7 +12,8 @@
 import { describe, it, expect } from "vitest";
 import { escapeHtml, safeUrl } from "../src/jobs.js";
 import { safeEqual, checkRate } from "../worker/security.js";
-import { normalizeLocation } from "../worker/normalize.js";
+import { normalizeLocation, jobHash, hoursAgo,
+         REFRESH_AFTER_HOURS, CLOSE_AFTER_HOURS } from "../worker/normalize.js";
 import { toText, isRelevantTitle } from "../worker/sources.js";
 /* From search.js, not index.js: the Worker entry now exports the Agent class,
    which imports `cloudflare:workers` — a module vitest cannot resolve, so
@@ -212,6 +213,67 @@ describe("ftsQuery", () => {
   it("caps token count so a long paste cannot build a huge query", () => {
     const many = ftsQuery("a b c d e f g h i j k l m n o p");
     expect(many.split(" AND ")).toHaveLength(8);
+  });
+});
+
+/* Change detection decides whether a row is written at all, so a hash that
+   misses a field means the stored posting keeps a stale value indefinitely and
+   nothing anywhere reports it. The field list IS the contract. */
+describe("jobHash", () => {
+  const base = {
+    company: "Anduril", title: "Perception Engineer",
+    url: "https://example.com/1", location_raw: "Seattle, WA",
+    location: "Seattle", country: "United States", remote: 0,
+    jd_chars: 1800, thin: 0, posted_at: "2026-07-01T00:00:00Z",
+    jd: "Build the perception stack.",
+  };
+
+  it("is stable for identical input — otherwise every row rewrites every sweep", () => {
+    expect(jobHash(base)).toBe(jobHash({ ...base }));
+    expect(jobHash(base)).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it("changes when ANY written column changes", () => {
+    /* Each of these is a column the upsert's DO UPDATE writes. Miss one and a
+       real change to it is invisible to the WHERE clause forever. */
+    for (const [k, v] of Object.entries({
+      company: "Figure", title: "Controls Engineer", url: "https://example.com/2",
+      location_raw: "Remote", location: "Remote", country: "India",
+      remote: 1, jd_chars: 9, thin: 1, posted_at: "2026-07-02T00:00:00Z",
+      jd: "Different body.",
+    })) {
+      expect(jobHash({ ...base, [k]: v }), k).not.toBe(jobHash(base));
+    }
+  });
+
+  it("does not confuse a field boundary shift", () => {
+    // Joined on a space these two would be the same string.
+    expect(jobHash({ ...base, title: "Perception", url: "Engineer https://x" }))
+      .not.toBe(jobHash({ ...base, title: "Perception Engineer", url: "https://x" }));
+  });
+
+  it("survives nulls without throwing", () => {
+    expect(() => jobHash({ ...base, country: null, posted_at: null, jd: null })).not.toThrow();
+  });
+});
+
+/* The refresh window and the close window are a matched pair. If they ever
+   cross, the sweep closes live roles and the site empties — the one failure
+   here that is worse than doing nothing at all. */
+describe("sweep windows", () => {
+  it("leaves margin for missed sweeps: a row is refreshed long before it can be closed", () => {
+    const SWEEP_INTERVAL_HOURS = 6; // the cron in .github/workflows/sync-jobs.yml
+    const worstCaseRefresh = REFRESH_AFTER_HOURS + SWEEP_INTERVAL_HOURS;
+    expect(worstCaseRefresh).toBeLessThan(CLOSE_AFTER_HOURS);
+    // and not by a hair — at least two whole sweeps of slack
+    expect(CLOSE_AFTER_HOURS - worstCaseRefresh).toBeGreaterThanOrEqual(2 * SWEEP_INTERVAL_HOURS);
+  });
+
+  it("hoursAgo goes backwards, and is comparable as an ISO string", () => {
+    const from = Date.parse("2026-07-23T12:00:00.000Z");
+    expect(hoursAgo(20, from)).toBe("2026-07-22T16:00:00.000Z");
+    // Lexicographic comparison is what the SQL `last_seen < ?` relies on.
+    expect(hoursAgo(48, from) < hoursAgo(20, from)).toBe(true);
   });
 });
 
