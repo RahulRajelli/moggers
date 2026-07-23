@@ -99,6 +99,42 @@ certificate during step 3. Confirm with `npx wrangler deployments list` and by
 loading the domain over HTTPS. Certificate issuance can lag the deploy by a few
 minutes on first publish.
 
+## Ingest runs in GitHub Actions
+
+Repo: <https://github.com/RahulRajelli/moggers> (public).
+Workflow: `.github/workflows/sync-jobs.yml`, every 6 hours + manual dispatch.
+
+The Worker cannot do a full sweep — Workers Free caps CPU at 10 ms per
+invocation, cron included. Node has no such limit, so all 19 boards are swept in
+Actions and the result applied to D1 with `wrangler d1 execute --remote --file`.
+The Worker's own cron still runs `purgeExpired()` (session cleanup) plus one
+board as a fallback.
+
+**Frequency is bounded by D1 writes, not Actions minutes.** Free D1 allows
+100,000 rows written/day; one full sweep writes ~13,500, so ~7/day is the
+ceiling. At 4/day this uses ~54k. Before shortening the cron, add change
+detection — only emit UPDATE where the JD hash actually changed.
+
+`tools/seed.mjs` aborts with a non-zero exit if fewer than 200 jobs survive the
+sweep, so a network blip cannot zero the facets while the jobs table still holds
+thousands of rows. The workflow then re-checks the live `/api/facets` total and
+fails if the site reports under 200.
+
+### Required repo secrets
+
+| Secret | Value |
+|---|---|
+| `CLOUDFLARE_ACCOUNT_ID` | already set |
+| `CLOUDFLARE_API_TOKEN` | **create this** — see below |
+
+Create the token at <https://dash.cloudflare.com/profile/api-tokens> → Create
+Token → Custom token. Give it exactly one permission: **Account → D1 → Edit**,
+scoped to your account. Nothing else — it only needs to write job rows, and a
+narrow token limits the blast radius if the repo's CI is ever compromised.
+
+Then: `gh secret set CLOUDFLARE_API_TOKEN` (paste when prompted), and
+`gh workflow run "Sync job index"` to test it.
+
 ## Post-deploy verification
 
 These cannot be checked locally and must be done against production.
