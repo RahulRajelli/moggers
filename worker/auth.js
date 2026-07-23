@@ -75,11 +75,18 @@ function readCookie(request) {
 
 /* ── flow ─────────────────────────────────────────────────────────────── */
 
+/* Secrets set by piping (`echo x | wrangler secret put`) keep the trailing
+   newline, and `gh secret set` from a file does the same. A stray \n in a
+   client_id is invisible everywhere except the wire, where it arrives as %0A
+   and the provider rejects it — GitHub sign-in failed exactly this way. Trim
+   every credential at the point of use so it cannot recur. */
+const clean = (v) => (typeof v === "string" ? v.trim() : v);
+
 export async function startLogin(db, env, url, providerName) {
   const provider = PROVIDERS[providerName];
   if (!provider) return null;
 
-  const clientId = env[provider.idKey];
+  const clientId = clean(env[provider.idKey]);
   if (!clientId) return null; // provider not configured — caller renders an error
 
   const state = randomToken(16);
@@ -150,8 +157,8 @@ export async function completeLogin(db, env, url, providerName) {
   if (!(await consumeState(db, state, providerName))) return { error: "bad state" };
 
   const body = new URLSearchParams({
-    client_id: env[provider.idKey],
-    client_secret: env[provider.secretKey],
+    client_id: clean(env[provider.idKey]),
+    client_secret: clean(env[provider.secretKey]),
     code,
     redirect_uri: `${url.origin}/auth/callback/${providerName}`,
     grant_type: "authorization_code",
