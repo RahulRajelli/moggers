@@ -97,10 +97,11 @@ costs the site zero bytes. The traced 2D art is in `index.html`'s sprite
 
 ## Loose ends
 
-- **Rotate the GitHub and Google OAuth client secrets** if they were only
-  re-entered rather than regenerated — both were pasted into a chat transcript.
-  Phase 5 pairs this with LinkedIn OIDC sign-in, which *is* allowed: the repo's
-  LinkedIn ban covers republishing **listings**, not authentication.
+- ~~Rotate the GitHub and Google OAuth client secrets.~~ **Done** — regenerated
+  2026-07-23, confirmed by Rahul. Nothing to chase here.
+  That leaves Phase 5 as just **LinkedIn OIDC sign-in**, which *is* allowed:
+  the repo's LinkedIn ban covers republishing **listings**, not authentication.
+  It needs a LinkedIn developer app, which is a manual step only Rahul can do.
 - **No scheduled watcher alarm has ever been observed firing.** Creating a watch
   works and `armed` reads 1; `scheduleEvery` re-arming across a real 6h boundary
   is unconfirmed. If it silently becomes a one-shot there is no other symptom —
