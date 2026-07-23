@@ -16,40 +16,62 @@ Everything below is **live and verified in production**, not merely committed.
 | **THE MOGGER** | Traced line art. Hero specimen frame with the X-ray scan band, 404, both empty states, footer mark, card 04, resilient page, share card. |
 | **Gap → path** | `src/paths.js` — static keyword map, zero AI cost. A `CLOSE THE GAP` row under each match card. |
 | **resilient.html** | Six hands-on trade tracks, curated free links. In the nav bar, sitemap and `run_worker_first`. |
+| **Bullet roast** | `src/roast.js` — six objective checks on resume bullets. Client-side, free, no account, no AI call. |
+| **Interview prep** | `/api/interview` — questions drawn from a posting's own JD. BYOK-first, shared budget hard-capped at 110 neurons/call. |
 
-## The two candidates for next
+## Next up
 
-### Phase 2 — India boards (unblocked, clear payoff)
+Both of these were chosen deliberately; neither is blocked.
+
+### Phase 2 — India roles
 
 The write quota was the gate and it is gone: ~19k/day of 100k, so there is room
 for several more boards.
 
-Add India-based robotics/EV/AI companies **that have a public
-Greenhouse/Lever/Ashby feed**. Verify by *fetching the feed first* — many Indian
-firms use Naukri or Darwinbox, which have no public feed and are off-limits.
-Candidates: Ather Energy, Ola Electric / Krutrim, ideaForge, Sarvam AI.
+India roles today arrive only as the India offices of the 19 global boards. Add
+India-based robotics / EV / AI companies **that publish a Greenhouse, Lever or
+Ashby feed**.
 
-Process: verify the feed responds → add to `BOARDS` in `worker/sources.js` →
-seed off-platform with `node tools/seed.mjs` → embed backfill via `/api/embed`.
-The title filter keeps only relevant roles regardless.
+**Verify the feed responds BEFORE adding anything.** Many Indian firms run on
+Naukri or Darwinbox, which have no public feed and are off-limits — the repo
+bans scraping for publisher-liability reasons, and that rule does not bend for
+a good candidate. Worth checking: Ather Energy, Ola Electric / Krutrim,
+ideaForge, Sarvam AI.
 
-### Phase 6 — further AI features
+Process per board: confirm the feed → add to `BOARDS` in `worker/sources.js` →
+seed off-platform with `node tools/seed.mjs` (a full sweep cannot run in a
+Worker; that is the 10 ms CPU limit, not a bug) → backfill embeddings via
+`/api/embed` in slices.
 
-**Read the gate first.** The plan says "pick after the watcher proves
-retention", and there is no retention data yet — the watcher has been live for
-hours, with one user, who then deleted their watch. All three candidates spend
-against an 8,000/day neuron budget:
+Check `sync()`'s `seen / fetched / skipped_by_title` per board afterwards. The
+title filter is aggressive by design, and a board that contributes 3 roles out
+of 400 is worth knowing about before it is permanent.
 
-1. **Interview prep per role** — likely questions from a JD. BYOK-first.
-2. **Resume bullet roaster** — *the exception*: client-side heuristics
-   (weak-verb list, no-metrics detector) are free, need no retention data and
-   can ship today without guessing. AI rewrite behind BYOK.
-3. **Watcher digest ranking** — rank a delta against the saved resume excerpt,
-   **on open only**, never on the schedule. That is the neuron rule the watcher
-   was designed around.
+### Phase 7 — the launch video
 
-Explicitly not: the tool-calling loop, auto-apply, anything that hits the ATS
-boards harder.
+~60–85 s, rendered offline with the **existing Codex + Remotion pipeline** used
+for the robosimtools promo (see the `files/` directory beside this repo). Reuse
+its conventions rather than reinventing them:
+
+- **All timing lives in `src/edl.ts`.** Nothing else holds durations.
+- **`--gl=angle` is required** on this machine or the render fails.
+- The honesty stance from that project applies here too: do not imply
+  capability the product does not have.
+
+Beats already agreed:
+
+1. Ligature glitch hook — "your resume says veriﬁcation… the parser sees □"
+2. The X-Ray scan
+3. Live roles
+4. MATCH ME, landing on a named gap
+5. The watcher — "we watch 19 boards so you don't"
+6. THE MOGGER adjusting his tie
+7. "SURVIVE THE FILTER. moggers.in"
+
+**The 3D Mogger lives in the video and nowhere else.** The site deliberately
+deleted three.js once (130 kB gzipped); the video is rendered offline, so it
+costs the site zero bytes. The traced 2D art is in `index.html`'s sprite
+(`#moggerInk` / `#moggerAcid`) if a reference is wanted.
 
 ## Traps this codebase has already paid for
 
