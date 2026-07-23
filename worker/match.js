@@ -16,10 +16,20 @@
  */
 import { embedQuery } from "./embed.js";
 
-/* 3B rather than 8B. The task is ranking plus two short strings — not deep
-   reasoning — and 8B measured 23-33s, which is past what anyone waits for.
-   Override with the GEN_MODEL var to A/B without a code change. */
-export const DEFAULT_GEN_MODEL = "@cf/meta/llama-3.2-3b-instruct";
+/* Chosen by benchmark (POST /api/bench?model=…), not by reputation.
+ *
+ *   llama-3.2-3b       3.6s   cheap, but HALLUCINATES: it attributed Anduril's
+ *                             "Lattice OS" to an OpenAI role
+ *   llama-4-scout      7.5s   accurate, role-specific gaps drawn from each JD
+ *   llama-3.1-8b      20.0s   slower AND worse — repeated one gap four times
+ *   gpt-oss-20b        4.6s   spends the whole budget on reasoning_content
+ *   qwen3-30b-a3b      6.7s   same, empty content
+ *   gemma-4-26b        9.8s   unparseable output
+ *
+ * Scout is a mixture-of-experts model: 17B total but only a fraction active per
+ * token, which is why it lands nearer 3B latency than its size suggests.
+ * Override with the GEN_MODEL var to re-run the comparison without a deploy. */
+export const DEFAULT_GEN_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
 
 const MAX_RESUME_CHARS = 6000;   // ~1,500 tokens; past this is education and hobbies
 /* Vectorize's maximum. Retrieval is cheap (one query, no generation) and a
@@ -33,11 +43,18 @@ const CANDIDATES = 100;
 const RANKED = 6;
 const JD_CHARS = 600;            // per role, enough for requirements
 
-/* Free tier is 10,000 Neurons/day. One match costs roughly 110 (measured):
-   ~1 embed + ~64 input + ~45 output. The cap is deliberately below the true
-   ceiling so a burst cannot leave the rest of the day dead. */
+/* Free tier is 10,000 Neurons/day.
+ *
+ * Scout costs 24,545 neurons per M input tokens and 77,273 per M output. One
+ * match is ~2,500 in + ~350 out, so ~61 + ~27 + ~1 for the embedding ≈ 89.
+ * Rounded up for headroom. That is roughly 90 matches/day — ample now, and the
+ * lever if it ever is not is DEFAULT_GEN_MODEL: llama-3.2-3b costs ~23 neurons
+ * (~430/day) at the cost of the accuracy documented above.
+ *
+ * The cap sits below the true ceiling so a burst cannot leave the rest of the
+ * day dead for everyone else. */
 export const DAILY_NEURON_BUDGET = 8000;
-const NEURONS_PER_MATCH = 110;
+const NEURONS_PER_MATCH = 95;
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -196,7 +213,21 @@ export async function matchResume(env, resumeText) {
     temperature: 0.2, // ranking should be stable across runs
   });
 
-  const parsed = parseJsonArray(res?.response ?? res?.result?.response ?? "");
+  /* Response shape varies by model family, and none of it is documented in one
+     place: llama returns `response`; gpt-oss and several others return an
+     OpenAI chat-completion with the text at choices[0].message.content. Try
+     each rather than pinning to one family.
+
+     (gpt-oss-20b was rejected during benchmarking for a related reason: it
+     spends its whole token budget on `reasoning_content` and leaves `content`
+     null. Getting an answer out needs a far larger max_tokens — slower and
+     dearer than the model we chose.) */
+  const rawOut =
+    res?.response ??
+    res?.result?.response ??
+    res?.choices?.[0]?.message?.content ??
+    "";
+  const parsed = parseJsonArray(rawOut);
   const byId = new Map(roles.map((r) => [r.id, r]));
 
   /* Only ids from the retrieved set survive — a hallucinated id is dropped

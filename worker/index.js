@@ -513,6 +513,23 @@ export default {
         return json(result);
       }
 
+      /* Model bench. Token-guarded, no session needed — it exists to compare
+         latency and output quality across models on the real pipeline, which
+         cannot be done honestly from the outside. Safe to delete. */
+      if (url.pathname === "/api/bench") {
+        if (request.method !== "POST") return json({ error: "method not allowed" }, 405);
+        const token = request.headers.get("x-sync-token") || "";
+        if (!env.SYNC_TOKEN || !safeEqual(token, env.SYNC_TOKEN)) {
+          return json({ error: "unauthorized" }, 401);
+        }
+        const model = url.searchParams.get("model");
+        if (!model) return json({ error: "?model= required" }, 400);
+        const body = await request.json().catch(() => ({}));
+        const t0 = Date.now();
+        const result = await matchResume({ ...env, GEN_MODEL: model }, body?.resume || "");
+        return json({ ...result, ms: Date.now() - t0 });
+      }
+
       if (url.pathname === "/api/account" && request.method === "DELETE") {
         if (!sameOrigin(request, url)) return json({ error: "bad origin" }, 403);
         const user = await currentUser(env.DB, request);
