@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MOGGERS — ATS X-Ray</title>
+<meta name="description" content="See your resume the way an ATS parser sees it. Runs entirely in your browser — nothing is uploaded. Plus live robotics and AI roles straight from company job boards." />
+<link rel="canonical" href="https://moggers.in/" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://moggers.in/" />
+<meta property="og:title" content="MOGGERS — ATS X-Ray" />
+<meta property="og:description" content="Your resume looks perfect and the parser reads veriﬁcation as one glyph. See what it actually sees — in your browser, nothing uploaded." />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230B0B0B'/><text y='.9em' x='.1em' font-size='78' font-family='monospace' font-weight='bold' fill='%23D8FF1A'>M</text></svg>" />
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__mark">
+    <span class="bar__block"></span>
+    <span class="bar__name">MOGGERS</span>
+  </div>
+  <div class="bar__meta">
+    <span class="tag">ATS&nbsp;X-RAY</span>
+    <span class="bar__note">the checker runs in-browser · no account needed</span>
+    <span class="bar__auth" id="authBox"></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── HERO ─────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero__copy">
+      <h1 class="hero__title">
+        YOUR RESUME<br />
+        IS <span class="mark">INVISIBLE</span>
+      </h1>
+      <p class="hero__sub">
+        It looks perfect on screen. The parser reads
+        <code class="glitch">veri<span class="lig">ﬁ</span>cation</code>
+        as one glyph, the search misses it, and you never hear back.
+      </p>
+
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Drop or choose a PDF resume">
+        <span class="drop__big" id="dropLabel">DROP YOUR PDF</span>
+        <span class="drop__small">or click to choose · never leaves your device</span>
+        <input type="file" id="file" accept="application/pdf,.pdf" hidden />
+      </div>
+
+      <p class="sample">
+        <button type="button" id="sample">Scan a deliberately broken sample →</button>
+      </p>
+    </div>
+
+    <!-- THE SPECIMEN.
+         Hand-authored line art, not 3D. The acid copy is clipped to a band that
+         sweeps down the figure — the same technique the WebGL version used with
+         clipping planes, at ~2 kB instead of 130 kB of three.js, with no GPU and
+         no loading state. Faceless and genderless by construction. -->
+    <figure class="specimen">
+     <div class="specimen__stage">
+      <svg class="specimen__svg" viewBox="0 0 300 380" role="img"
+           aria-label="Orthographic drawing of a human figure being scanned">
+        <defs>
+          <g id="figure">
+            <!-- head -->
+            <circle cx="150" cy="58" r="27" />
+            <path d="M150 31 V85 M123 58 H177" class="cx" />
+            <!-- neck -->
+            <path d="M139 84 v14 M161 84 v14" />
+            <!-- shoulders + torso -->
+            <path d="M88 124 C114 100 186 100 212 124" />
+            <path d="M88 124 L96 232 C124 244 176 244 204 232 L212 124" />
+            <path d="M104 160 H196 M108 196 H192" class="cx" />
+            <!-- arms -->
+            <path d="M88 124 L64 214 L58 286" />
+            <path d="M212 124 L236 214 L242 286" />
+            <path d="M58 286 l-6 16 M242 286 l6 16" />
+            <!-- legs -->
+            <path d="M126 240 L118 356 M126 240 L150 240" />
+            <path d="M174 240 L182 356 M174 240 L150 240" />
+            <path d="M118 356 l-10 8 M182 356 l10 8" />
+          </g>
+        </defs>
+
+        <!-- centre line -->
+        <path class="specimen__cx" d="M150 18 V368" />
+
+        <!-- base figure -->
+        <g class="specimen__ink"><use href="#figure" /></g>
+
+        <text class="specimen__anno" x="18" y="24">SUBJECT / ORTHOGRAPHIC</text>
+        <text class="specimen__anno" x="18" y="372">SECTION A–A · SWEEPING</text>
+      </svg>
+
+      <!-- The lit slice is a SECOND svg stacked on top, reusing the same <g>
+           via <use>. The travelling window is a CSS clip-path on this element:
+           applied to an SVG <g> the percentages do not resolve and the animation
+           sits frozen on its first keyframe, which is exactly what happened.
+           On an element in HTML flow it interpolates correctly. -->
+      <svg class="specimen__svg specimen__svg--acid" viewBox="0 0 300 380" aria-hidden="true">
+        <g class="specimen__acid"><use href="#figure" /></g>
+      </svg>
+     </div>
+      <figcaption>
+        <span>THE&nbsp;SPECIMEN</span>
+        <span class="specimen__sub">scanning…</span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <details class="jd">
+    <summary><span>+</span> Paste the job description <em>— checks the keywords it actually wants</em></summary>
+    <textarea id="jd" rows="6" placeholder="Paste the full JD here. Anything under 1500 characters is a fragment, not a posting — it inflates every keyword score, including the ones your competitors brag about."></textarea>
+    <p class="jd__warn" id="jdWarn" hidden></p>
+  </details>
+
+  <!-- ── RESULTS ──────────────────────────────────────────── -->
+  <section class="results" id="results" hidden>
+
+    <div class="verdict" id="verdict">
+      <div class="verdict__score">
+        <span class="verdict__num" id="verdictNum">—</span>
+        <span class="verdict__den">/ 5 checks</span>
+      </div>
+      <div class="verdict__text">
+        <h2 id="verdictTitle">SCANNING…</h2>
+        <p id="verdictSub"></p>
+      </div>
+    </div>
+
+    <ul class="checks" id="checks"></ul>
+
+    <div class="panel">
+      <div class="panel__head">
+        <h3>WHAT THE PARSER ACTUALLY SEES</h3>
+        <span class="panel__meta" id="layerMeta"></span>
+      </div>
+      <pre class="layer" id="layer"></pre>
+      <p class="panel__foot">
+        Red glyphs are ligatures. To an ATS they are single characters — the words containing
+        them are not searchable, no matter how correct they look.
+      </p>
+    </div>
+
+    <div class="panel" id="kwPanel" hidden>
+      <div class="panel__head"><h3>KEYWORDS THE JD WANTS</h3></div>
+      <div class="kw" id="kw"></div>
+    </div>
+  </section>
+
+  <!-- ── JOBS ─────────────────────────────────────────────── -->
+  <section class="jobs" id="jobs">
+    <div class="jobs__head">
+      <h2 class="jobs__title">LIVE<br />ROLES</h2>
+      <p class="jobs__blurb">
+        Pulled straight from company ATS boards — Greenhouse, Lever, Ashby. Full
+        job descriptions, no board reposts, no ghost listings. A role disappears
+        here when it disappears from the company's own feed.
+        <span class="jobs__stat" id="jobsStat"></span>
+        <span class="jobs__fresh" id="jobsFresh"></span>
+      </p>
+    </div>
+
+    <div class="filters">
+      <input type="search" id="jobQ" placeholder="robotics, perception, simulation…" aria-label="Search roles" />
+      <select id="jobCountry" aria-label="Filter by country"><option value="">Anywhere</option></select>
+      <select id="jobCompany" aria-label="Filter by company"><option value="">All companies</option></select>
+      <label class="toggle"><input type="checkbox" id="jobRemote" /> <span>Remote only</span></label>
+    </div>
+
+    <div id="jobList" class="joblist" aria-live="polite"></div>
+    <button type="button" id="jobMore" class="more" hidden>LOAD MORE</button>
+  </section>
+
+  <!-- ── EXPLAINER ────────────────────────────────────────── -->
+  <section class="why">
+    <h2 class="why__title">WHY THIS<br />EXISTS</h2>
+    <div class="why__grid">
+      <article class="card">
+        <span class="card__num">01</span>
+        <h3>Every other tool scores you</h3>
+        <p>They tell you the match is 72% and sell you a rewrite. None of them check whether the parser can read the words at all. A score computed on text an ATS cannot extract is a number about nothing.</p>
+      </article>
+      <article class="card card--acid">
+        <span class="card__num">02</span>
+        <h3>Ligatures are the silent killer</h3>
+        <p>Measured on real resumes: <b>V&amp;V</b>, <b>qualification</b> and <b>fixed-wing</b> were all invisible to a parser until ligatures were disabled at the font level. The page looked identical either way.</p>
+      </article>
+      <article class="card">
+        <span class="card__num">03</span>
+        <h3>The checker never asks who you are</h3>
+        <p>Your browser parses the file. No upload, no account, no storage — close the tab and it is gone. Open the network panel and check. Signing in is only for saving roles.</p>
+      </article>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>MOGGERS</span>
+  <span class="foot__mid">
+    built by <a href="https://robosimtools.com">robosimtools</a> ·
+    <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a>
+  </span>
+  <span>no upload · no tracking</span>
+</footer>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

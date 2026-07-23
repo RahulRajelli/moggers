@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+
+# The API is data for this site's own pages, not a crawl target. Crawling it
+# burns D1 row-read quota and indexes nothing a human would search for.
+Disallow: /api/
+Disallow: /auth/
+Disallow: /signin.html
+
+# AI crawlers welcome — being cited in AI answers is the distribution strategy,
+# same posture as robosimtools.com.
+User-agent: GPTBot
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: https://moggers.in/sitemap.xml

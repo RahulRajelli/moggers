@@ -1,0 +1,59 @@
+name = "moggers"
+main = "worker/index.js"
+compatibility_date = "2026-07-01"
+
+# No *.workers.dev URL. The site is reachable at moggers.in or not at all —
+# which also means there is no second origin for OAuth callbacks to mismatch.
+workers_dev = false
+
+# Provisions the custom domain as part of `wrangler deploy`, certificate and all.
+# REQUIRES moggers.in to already be a zone on this Cloudflare account. It is
+# currently on GoDaddy nameservers (ns63/ns64.domaincontrol.com), so deploy will
+# fail until the zone is moved — see DEPLOY.md. That failure is the intended
+# gate, not a bug: it stops the site going live at a URL you did not choose.
+routes = [
+  { pattern = "moggers.in", custom_domain = true },
+  # www exists only to 301 to the apex (see the redirect in worker/index.js).
+  # Serving both hostnames would be duplicate content; one canonical host is
+  # cleaner than relying on the <link rel=canonical> alone.
+  { pattern = "www.moggers.in", custom_domain = true }
+]
+
+# Static assets + API + cron in one deploy. Pages Functions cannot carry a cron
+# trigger, so this is a Worker with an assets binding rather than a Pages project.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+# NOT single-page-application: this is a multi-page site (index, signin, privacy,
+# terms). SPA handling would rewrite every unknown path to index.html, so a
+# typo'd URL would render the app and return 200 instead of a real 404.
+not_found_handling = "404-page"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "moggers"
+# Created 2026-07-23 in region APAC (`wrangler d1 create moggers`).
+# The binding stays DB even though wrangler suggests the database name — the
+# Worker reads env.DB everywhere.
+database_id = "3c752a55-9a67-45a1-9db6-019597c6c2fd"
+
+# Burst protection. The binding only supports 10s or 60s windows, so this stops
+# hammering — it is not a daily budget. Anything with per-call cost (the matching
+# agent) needs its own persistent counter as well: 60 req/min is 86,400/day.
+[[ratelimits]]
+name = "API_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 60
+  period = 60
+
+[triggers]
+# Six-hourly. ATS boards do not change fast enough to justify more, and each
+# sweep costs ~19 subrequests.
+crons = ["17 */6 * * *"]
+
+[observability]
+enabled = true
+
+# Secret, not a var:  wrangler secret put SYNC_TOKEN

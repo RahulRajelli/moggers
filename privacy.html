@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy — MOGGERS</title>
+<meta name="description" content="What moggers.in does and does not collect. The resume checker runs entirely in your browser." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%230B0B0B'/><text y='.9em' x='.1em' font-size='78' font-family='monospace' font-weight='bold' fill='%23D8FF1A'>M</text></svg>" />
+</head>
+<body>
+
+<header class="bar">
+  <div class="bar__mark">
+    <span class="bar__block"></span>
+    <a class="bar__name" href="/">MOGGERS</a>
+  </div>
+  <div class="bar__meta"><span class="tag">PRIVACY</span></div>
+</header>
+
+<main class="legal">
+  <h1 class="legal__title">PRIVACY</h1>
+  <p class="legal__date">Last updated: 22 July 2026</p>
+
+  <p class="legal__lede">
+    Short version: the resume checker never sends your file anywhere and never
+    asks who you are. There are no analytics and no tracking cookies. If you
+    choose to sign in — optional, and only needed to save roles — we store your
+    email, name and avatar from that provider, and nothing else.
+  </p>
+
+  <h2>Who is responsible</h2>
+  <p>
+    This site is operated by Rahul Rajelli, sole proprietor, India. For any
+    privacy question or request, contact
+    <a href="mailto:rahullrvithal@gmail.com">rahullrvithal@gmail.com</a>.
+  </p>
+
+  <h2>ATS X-Ray — your resume is never uploaded</h2>
+  <p>
+    When you drop a PDF into the checker, it is parsed by JavaScript running in
+    your own browser. The file is never transmitted, never stored, and never seen
+    by us or by any third party. Nothing persists after you close the tab.
+  </p>
+  <p>
+    This is not a promise you have to take on trust. The page's Content Security
+    Policy sets <code>connect-src 'self'</code>, which means the browser itself
+    will refuse any connection to a third-party server. Open your browser's
+    network panel and run a scan: you will see no request carrying your file.
+  </p>
+  <p>
+    The same applies to any job description you paste. It is used in your browser
+    and discarded.
+  </p>
+
+  <h2>Live Roles — public job data only</h2>
+  <p>
+    The job listings come from the public job-board APIs that Greenhouse, Lever
+    and Ashby publish so employers' careers pages can display their own openings.
+    We store the job title, company, location, link and description text. This is
+    published business information. It contains no data about you.
+  </p>
+
+  <h2>Accounts — only if you choose one</h2>
+  <p>
+    You can use the resume checker and browse roles without ever signing in.
+    An account exists for one thing today: saving roles.
+  </p>
+  <p>
+    Sign-in is via GitHub or Google. <b>No password is ever stored</b> — there is
+    no password field on this site, by design. From your chosen provider we
+    receive and store your email address, display name and avatar URL, plus an
+    identifier for that provider. We also store the roles you save.
+  </p>
+  <p>
+    Your session is a cookie. It is <code>HttpOnly</code> (no script can read
+    it), <code>Secure</code> and <code>SameSite=Lax</code>, and it expires after
+    30 days. The database stores only a cryptographic hash of your session
+    token, never the token itself, so a copy of the database is not a set of
+    usable logins. The cookie is strictly functional — it is not used for
+    analytics or advertising, which is why there is no cookie banner.
+  </p>
+  <p>
+    <b>Deleting your account erases it.</b> The record is removed, not flagged
+    as inactive, and your saved roles and sessions are deleted with it. Nothing
+    is retained afterwards.
+  </p>
+
+  <h2>What the server does receive</h2>
+  <ul>
+    <li>
+      <b>Your IP address.</b> Unavoidable — it is how a response reaches you. We
+      use it for one purpose beyond delivery: rate limiting, so a single source
+      cannot overwhelm the site. It is not stored in our database and is not used
+      to build a profile.
+    </li>
+    <li>
+      <b>Standard request logs</b> held briefly by our infrastructure provider,
+      Cloudflare, whose privacy terms govern that processing.
+    </li>
+  </ul>
+  <p>
+    We use <b>no analytics</b>, <b>no advertising or tracking pixels</b>, and
+    <b>no third-party embeds</b>. The only cookie is the functional session
+    cookie described above, and only if you sign in. There is no tracking to
+    consent to, which is why you are not being asked.
+  </p>
+
+  <h2>Your rights</h2>
+  <p>
+    Under India's Digital Personal Data Protection Act, 2023 — and equivalent
+    laws elsewhere — you have rights of access, correction, erasure and
+    grievance redress over personal data held about you. If you have never
+    signed in, we hold nothing about you beyond transient request logs. If you
+    have an account, you can delete it yourself at any time, or write to the
+    address above and we will do it and confirm what existed.
+  </p>
+
+  <h2>Changes</h2>
+  <p>
+    If this site later adds a feature that sends your text to a server — for
+    example a matching assistant — that feature will be strictly opt-in, will say
+    so at the point of use, and this page will be updated before it ships. The
+    in-browser checker will remain in-browser.
+  </p>
+
+  <p class="legal__back"><a href="/">← back to the tool</a></p>
+</main>
+
+<footer class="foot">
+  <span>MOGGERS</span>
+  <span class="foot__mid"><a href="/terms.html">Terms</a></span>
+  <span>no upload · no account · no tracking</span>
+</footer>
+
+<script type="module" src="/src/legal.js"></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+name: Sync job index
+
+# Ingest runs HERE, not in the Worker.
+#
+# The Workers Free plan allows 10 ms of CPU per invocation — cron triggers
+# included, which is not obvious and is why the original all-boards sweep failed
+# in production with a bare `1102` while looking fine in local dev. Node has no
+# such limit, so the full 19-board sweep runs here and the Worker only serves
+# reads.
+#
+# The Worker's own cron still runs: it handles purgeExpired() (session and
+# oauth_state cleanup, which this workflow cannot do) plus one board as a
+# fallback if Actions is ever disabled.
+
+on:
+  schedule:
+    # Every 6 hours. NOT hourly — see the write-quota note below.
+    # Minute 40 keeps it clear of the Worker cron at :17.
+    - cron: "40 */6 * * *"
+  workflow_dispatch: # manual run from the Actions tab
+
+# D1 free tier allows 100,000 rows written/day. One full sweep writes ~13,500
+# (measured), so ~7 sweeps/day is the ceiling. At 4/day this uses ~54k and
+# leaves headroom for the Worker cron and any manual runs.
+#
+# This is still a 19x freshness improvement: the Worker cron refreshes ONE board
+# per 6 hours (a ~5 day cycle for all 19); this refreshes ALL of them.
+#
+# To go more frequent, add change detection — only emit UPDATE for rows whose
+# JD hash actually changed. Most jobs are unchanged between runs, so writes
+# would collapse by an order of magnitude. Do that before shortening the cron.
+
+concurrency:
+  group: sync-jobs
+  cancel-in-progress: false # never interrupt a half-applied sweep
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # Fetches all 19 public ATS boards, applies the title filter, normalises,
+      # and emits SQL. Exits non-zero if the sweep looks broken (< 200 jobs),
+      # which leaves the existing corpus untouched rather than zeroing facets.
+      - name: Sweep boards
+        run: node tools/seed.mjs > seed.sql
+
+      - name: Report sweep size
+        run: |
+          echo "statements: $(wc -l < seed.sql)"
+          echo "size: $(du -h seed.sql | cut -f1)"
+
+      - name: Apply to D1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 execute moggers --remote --file=seed.sql -y
+
+      - name: Verify the live index
+        run: |
+          total=$(curl -sf https://moggers.in/api/facets | node -e \
+            "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).total))")
+          echo "live total: $total"
+          # A sweep that leaves the site reporting nothing is a failed sweep.
+          if [ "$total" -lt 200 ]; then
+            echo "::error::live index reports $total roles — expected >= 200"
+            exit 1
+          fi
