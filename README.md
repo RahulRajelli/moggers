@@ -459,189 +459,75 @@ will not work, no matter what the code does.
 section removes itself. That is deliberate: the X-Ray must never depend on the
 job index being up.
 
-## THE SPECIMEN (inline SVG in `index.html`)
+## THE SPECIMEN — and the specimen is THE MOGGER
 
-Hand-authored orthographic line art — a figure with a band sweeping down it,
-lighting only the slice inside. Faceless and genderless by construction, and in
-the same drafting language planned for robosimtools.
+A cockroach in aviators and a tie, standing at a lectern, in the hero frame
+where a faceless human figure used to be. The acid copy is clipped to a band
+that sweeps down him — the same technique the WebGL version used with clipping
+planes, at a fraction of the cost.
+
+The swap earns its place rather than just being a joke: **the band reads as an
+X-ray passing through him**, which is the tool's actual name, and the traced
+art means the whole figure repaints acid inside the lit slice.
 
 **It used to be WebGL and should not go back.** Removing three.js deleted a
 **515 kB chunk (130 kB gzipped)** — by an order of magnitude the heaviest thing
-on the page — and replaced it with ~2 kB of markup, no GPU, no loader, no async
-chunk and no silent-failure path. The procedural bust it replaced could never
-have looked right: a `LatheGeometry` is a surface of revolution and human
-proportion is not.
+on the page — and a mascot is exactly the kind of decoration that invites it
+back. The `LatheGeometry` bust it replaced could never have looked right: a
+surface of revolution and human proportion do not meet.
 
-Two implementation notes:
+### The art is traced, not hand-plotted, and that was the whole problem
 
-- **The clip-path is on the outer `<svg>`, an element in HTML flow — not on the
-  inner `<g>`.** Applied to an SVG `<g>`, `inset()` percentages do not resolve
-  and the animation sits frozen on its first keyframe. Hence two stacked `<svg>`
-  elements sharing one `<g id="figure">` via `<use>`.
-- `prefers-reduced-motion` parks the band mid-torso rather than removing it, so
-  the figure still reads as sectioned.
+Four attempts at authoring him coordinate-by-coordinate produced a ladybird,
+then a beetle, then a bug whose crossed arms read as a bow tie. Plotting bezier
+control points blind does not converge on character art. What worked: generate
+the drawing to a written brief, then **trace it to paths with OpenCV**
+(`cv2.findContours` + `approxPolyDP`).
 
-**Verifying the motion:** CSS animations do not advance when the browser pane is
-hidden — the document timeline freezes and `requestAnimationFrame` never fires,
-so a sampled `clip-path` looks stuck on keyframe one. That is the environment,
-not a bug. Drive it deterministically instead:
+Three consequences worth knowing before touching it:
 
-```js
-const a = document.getAnimations().find(x => x.animationName === 'specimen-scan');
-a.currentTime = 2300;  // expect inset(43% 0px) — a 14%-tall band at mid-height
-```
+- **The source is STROKES, so the trace yields the OUTLINE of each stroke** —
+  filled shapes, not stroked ones. `.mogger__ink` is therefore `fill`, never
+  `stroke`, and the path carries `fill-rule="evenodd"` to punch the enclosed
+  regions back out. Get that wrong and he renders as a solid black slab.
+- **Filled shapes are what keep him recolourable**, which is what the scan band
+  needs. A raster could not do this at all — which is why the PNG was traced
+  rather than dropped in as an `<img>`.
+- **Two paths, not seven groups.** `#moggerAcid` is only the necktie and the
+  lectern panel, sitting *under* the ink so the outlines stay crisp over the
+  colour. They were found by labelling the enclosed white regions
+  (`connectedComponentsWithStats`) and picking the tall centred one and the
+  perfect rectangle.
 
-## The watcher (`worker/agent.js`, `worker/watch-core.js`, `src/watch.js`)
+Regenerating: the tracing script lives in the scratchpad, not the repo — it is
+a one-shot. If the art ever needs redoing, trace at ~720 px wide with
+`approxPolyDP` epsilon 0.7, which lands at ~30 kB of path data (16 kB gzipped
+for the whole page) and stays legible down to 116 px.
 
-A saved search that re-runs itself and reports what is new. One
-**Durable Object per signed-in user**, addressed by user id.
+### Placements
 
-The ingest already refreshes 19 boards every 6 hours and nobody was watching
-that stream on anyone's behalf. A job seeker does not want to come back and
-search; they want to be told when the role appears. It is the only feature here
-that gives anyone a reason to return.
-
-```
-POST   /api/watch        save the current filters + interval, seed the baseline
-GET    /api/watch        the watch and its pending roles
-POST   /api/watch/check  run it now
-POST   /api/watch/ack    mark the pending list read
-DELETE /api/watch        stop and forget
-```
-
-### A Durable Object gets 30 s of CPU, not 10 ms
-
-This is the whole reason the feature is shaped this way. **The 10 ms free-plan
-ceiling that broke the all-boards sweep does not apply inside a Durable
-Object** — each incoming request resets a 30-second budget. Anything CPU-bound
-that had to be sliced or exiled to `tools/seed.mjs` could move in here.
-Verified against the DO limits docs, 2026-07-23.
-
-`[[migrations]]` must use `new_sqlite_classes`: only SQLite-backed classes exist
-on the free plan, and the SDK keeps its state and schedule tables there anyway.
-
-### Four decisions that are load-bearing
-
-**The first run reports nothing.** `setWatch()` seeds `seen` with everything the
-search currently returns and announces none of it. The user is *looking at those
-results* — the button lives under them — so replaying fifty back as "new since
-you looked" would be both false and the fastest way to teach someone the feature
-is noise. Changing only the interval does **not** re-baseline, or switching
-daily→weekly would silently bin the roles they came back to read.
-
-**Current results are re-inserted at the FRONT of `seen` on every run**
-(`mergeSeen`). A plain append-and-truncate looks correct and produces a specific
-bug: a long-lived posting ages out of the 600-id window while still matching the
-search, and the next run announces a role the user dismissed weeks ago. Covered
-by `tests/security.test.js`.
-
-**The diff never calls the generative model.** Free tier is 8,000 neurons/day and
-a match costs ~95, so an LLM pass per user per day does not survive a second
-user. Retrieval only — Vectorize + D1. Semantic mode costs one embedding (~2
-neurons), metered against the same daily counter, and **downgrades to keyword
-rather than skipping the run** when the budget is gone: a keyword check finds
-most new arrivals, a refused one finds none. Charged on the way *out*, and only
-if `searchJobs` reports it really ran semantic — it falls back to FTS whenever
-Vectorize is unavailable, and billing on the way in paid for calls that never
-happened.
-
-**No email.** `moggers.in` MX points at GoDaddy with a `-all` SPF record, so
-sending from the domain means editing the record a real working mailbox depends
-on. Deferred deliberately, not forgotten.
-
-### `worker/search.js` exists because of this feature
-
-`ftsQuery`, the FTS/semantic paths and every filter moved out of `worker/index.js`
-so the watcher and the site run **the same query**. A watcher that disagrees
-with the site is worse than no watcher, because by then the user has stopped
-checking for themselves. `normalizeSearch()` accepts both `"1"` (query string)
-and `true` (JSON) so the route and the agent do not have to fake each other's
-shape.
-
-### Nothing about the agent is publicly addressable
-
-There is no `routeAgentRequest()` anywhere, and that is a **security decision**.
-The SDK's routing exposes `/agents/mogger-agent/<instance>`, and with user ids
-as instance names that is a URL for reading someone else's watch. The Worker
-resolves the session cookie first and calls `getAgentByName(env.MoggerAgent,
-user.id)` itself, so the instance name is never client-supplied and the session,
-`Origin` and rate-limit guards all still sit in front. `/api/watch/check` fails
-**closed** on the limiter, like `/api/match` — it does real work per call.
-
-### Three ways a schedule outlives its reason to exist
-
-All of them leave an alarm firing forever against a free-tier quota, and none
-would ever surface on their own:
-
-| Case | Handled by |
+| Where | What |
 |---|---|
-| Account deleted | `DELETE /api/account` tears the agent down; `runWatch()` re-checks that the user row exists as a backstop. **A Durable Object is not in D1's cascade** — nothing else stops it |
-| User never returns | Dormant after 60 days with no read; the schedule cancels itself and one press of *check now* resumes it |
-| Schedule lost or duplicated | Every response carries `armed`, the live alarm count. Anything but 1 while watching is a bug, and the UI says so instead of leaving it to a dashboard |
+| Hero | Full figure in the specimen frame, with the acid scan band |
+| 404 | Full figure as a specimen plate |
+| Empty states (job list, matcher) | Full figure, 116 px |
+| Footer, every page | Head crop — the full figure is illegible below ~90 px |
+| Share card | Redrawn on canvas from the same two paths |
 
-`scheduleEvery()` is idempotent per *(callback, interval, payload)* — so a
-different interval creates a **new** schedule rather than replacing it.
-`setWatch()` cancels everything first; verified that daily→weekly→daily→weekly
-leaves `armed: 1`, not 4.
+The head crop's viewBox is derived from the **face region's** bounding box, not
+a percentage of the total height: a fixed fraction sliced through his jaw, and
+including the full antenna spread made the head too small to read at 30 px.
 
-### Bundle cost, measured
+### The two traps
 
-Adding `agents` took the Worker from **14.66 KB to 334 KB gzipped** — 11% of the
-3 MB free-plan cap, so there is room, but it is a 20× jump from one import and
-worth knowing before adding another SDK. It also forces two config changes:
-
-- **`compatibility_flags = ["nodejs_compat"]`** is mandatory. `agents` pulls in
-  `mimetext` for email helpers this Worker never calls, and that reaches for
-  `node:os`/`node:path`. Without the flag the **build fails outright**.
-- **`npm install agents --legacy-peer-deps`.** The package declares an optional
-  peer on `vite >=6 <9`; this project pins vite 5 for the static build. The
-  conflict is spurious — the peer is only for `agents/vite`, which is never
-  imported — but plain `npm install` refuses it.
-
-Do **not** enable `experimentalDecorators` in a tsconfig here: it breaks
-`@callable`. This code needs no decorators at all, since the Worker calls the
-agent over RPC rather than the browser calling it over WebSocket.
-
-### Testing it locally
-
-Durable Objects and their alarms *do* work in `wrangler dev`, unlike the rate
-limiter and the CPU ceiling.
-
-```
-npx wrangler dev --port 4342
-```
-
-No `--local` — see the warning under "Local development" above. With it, a
-semantic watch falls back to keyword and the matcher fails outright.
-
-Forge a session (see above), then drive the API with `curl`. The full local
-check that proved this build: create a watch (expect `fresh: []` and a non-zero
-`baseline`), `INSERT` a matching row into local D1, `POST /api/watch/check`
-(expect exactly that row), check again (expect **no** repeat), `ack`, check
-again (expect nothing).
-
-## THE MOGGER (inline SVG, `index.html` + `404.html`)
-
-A cockroach in a tie, in the same orthographic drafting language as THE
-SPECIMEN — fill:none, visible edges at 1.8, construction lines at 0.7. He is
-what you get instead of results: the job list's empty state, the matcher's
-no-match state, and the 404.
-
-**Not three.js, and not by accident.** Removing WebGL from this page deleted a
-130 kB gzipped chunk, and a mascot is exactly the kind of decoration that
-invites it back. He is ~2 kB of markup with no GPU, no loader, no async chunk
-and no silent-failure path. The 3D version belongs in the Remotion launch
-video, where bytes on this page are not a cost.
-
-Two things that were got wrong first and are worth keeping right:
-
-- **The silhouette is the whole illusion.** A rounded abdomen reads as a beetle
-  or a ladybird. Cockroach-ness comes from *tapered, overlapping wings* running
-  past the body and a small head tucked under a broad pronotum.
-- **The sprite is `<defs>` in a zero-sized `<svg>`, not `display:none`.** A
-  `display:none` SVG has historically stopped `<use>` resolving in Safari.
-  `404.html` carries its own copy — it is a separate document and cannot `<use>`
-  index.html's.
+- **`<use>` is not a `<path>`.** The share card's canvas renderer reads `d`
+  straight off the sprite nodes. An earlier version had `#mogger` pull its head
+  in via `<use>`, and the card silently drew a headless cockroach.
+- **Inline `<style>` inside an SVG is blocked by this site's CSP.** Preview
+  harnesses for this art must use presentation attributes
+  (`fill="#0B0B0B"`), not a `<style>` block — otherwise everything renders with
+  default black fills and looks broken for a reason that has nothing to do with
+  the drawing.
 
 ## The share card (`src/share.js`)
 

@@ -159,7 +159,9 @@ export function drawCard(result) {
     roundedText(ctx, result.worst, textX, detailY, textW);
   }
 
-  drawMogger(ctx, W - 215, 190, 0.62);
+  /* 529x770 at 0.45 is 238x347 — clears the text column on the left and the
+     footer line below it. */
+  drawMogger(ctx, W - 300, 235, 0.45);
 
   // ── footer ──
   ctx.fillStyle = INK;
@@ -184,49 +186,31 @@ export function drawCard(result) {
  *
  * No sprite (any page that is not index.html) simply means no mascot.
  */
+/* Read straight off the inline sprite rather than duplicated as path data
+   here. Two copies of a drawing is two drawings, and the one nobody looks at
+   is the one that silently stops matching — which for a shareable image is the
+   copy that gets seen most.
+
+   The art is traced from strokes, so these are FILLED outlines, not stroked
+   lines: fill them and the original pen weight comes with them. `evenodd` is
+   what punches the enclosed regions back out, and getting it wrong turns him
+   into a solid black slab. */
 function drawMogger(ctx, x, y, scale) {
-  if (!document.querySelector("#mogger path")) return;
+  const ink = document.querySelector("#moggerInk");
+  if (!ink) return;
+  const acid = document.querySelector("#moggerAcid");
 
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale, scale);
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
 
-  /* Stroke widths are in pre-transform units, so a literal 1.8 would come out
-     under a pixel on the card and vanish. Solve for the width we want to see. */
-  const heavy = 2.4 / scale;
-
-  /* Draw order is load-bearing, exactly as in the SVG: the lectern is filled
-     with paper so it OCCLUDES the abdomen and hind legs, which only works if
-     it goes down after them. */
-  const layers = [
-    /* #moggerHead is a separate group so the footer mark can use it alone, and
-       #mogger pulls it in with <use>. A <use> is not a <path>, so querying only
-       "#mogger path" would silently draw a headless cockroach on the card —
-       selecting both is what keeps the two in step. Document order puts the
-       head first, which is also the order it has to be drawn in. */
-    { sel: "#moggerHead path, #mogger path", stroke: INK, width: heavy },
-    { sel: "#moggerTie path", fill: ACID, stroke: INK, width: heavy },
-    { sel: "#moggerArms path", stroke: INK, width: heavy * 1.3 },
-    { sel: "#moggerShades path", fill: INK, stroke: INK, width: heavy * 0.6 },
-    { sel: "#moggerLectern path", fill: PAPER, stroke: INK, width: heavy },
-    { sel: "#moggerBadge path", fill: ACID, stroke: INK, width: heavy },
-  ];
-
-  for (const layer of layers) {
-    for (const p of document.querySelectorAll(layer.sel)) {
-      const path = new Path2D(p.getAttribute("d"));
-      const construction = p.classList.contains("cx");
-      if (layer.fill && !construction) {
-        ctx.fillStyle = layer.fill;
-        ctx.fill(path);
-      }
-      ctx.strokeStyle = construction ? "rgba(11,11,11,0.3)" : layer.stroke;
-      ctx.lineWidth = construction ? heavy * 0.4 : layer.width;
-      ctx.stroke(path);
-    }
+  if (acid) {
+    ctx.fillStyle = ACID;
+    ctx.fill(new Path2D(acid.getAttribute("d")));
   }
+  ctx.fillStyle = INK;
+  ctx.fill(new Path2D(ink.getAttribute("d")), "evenodd");
+
   ctx.restore();
 }
 

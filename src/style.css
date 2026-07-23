@@ -85,7 +85,7 @@ code { font-family: var(--mono); }
 .specimen { margin: 0; border: var(--rule); background: var(--paper); box-shadow: var(--shadow); }
 .specimen__stage { position: relative; }
 .specimen__svg {
-  display: block; width: 100%; aspect-ratio: 4 / 5; max-height: 460px;
+  display: block; width: 100%; aspect-ratio: 529 / 770; max-height: 460px;
   background: repeating-linear-gradient(0deg, rgba(11,11,11,.04) 0 1px, transparent 1px 5px);
 }
 .specimen__svg--acid {
@@ -95,9 +95,8 @@ code { font-family: var(--mono); }
 /* Line weights follow drafting convention: visible edges heavy, construction
    light. Same vocabulary as the robosimtools drawings, deliberately. */
 .specimen__ink  { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
-.specimen__acid { fill: none; stroke: var(--acid); stroke-width: 3.4; stroke-linejoin: round; stroke-linecap: round; }
+.specimen__acid { fill: var(--acid); }
 .specimen__ink .cx { stroke-width: 0.7; opacity: 0.3; }
-.specimen__acid .cx { display: none; }
 .specimen__cx { fill: none; stroke: var(--ink); stroke-width: 0.7; opacity: 0.25; stroke-dasharray: 14 4 3 4; }
 .specimen__anno {
   fill: var(--ink); opacity: 0.4; font-family: var(--mono);
@@ -529,22 +528,13 @@ code { font-family: var(--mono); }
    display:none <svg> in Safari has historically stopped <use> resolving. */
 .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 
-.mogger { display: block; width: 100%; max-width: 160px; aspect-ratio: 4 / 5; margin: 0 auto; }
-/* Same weights as .specimen__ink — visible edges heavy, construction light. */
-.mogger__ink { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
-.mogger__ink .cx { stroke-width: 0.7; opacity: 0.3; }
-/* Heavier than the anatomy on purpose: the crossed arms are the posture, and
-   at 1.8 they dissolved into the legs running behind them. */
-.mogger__arms { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
-/* FILLED, not outlined. Solid black is what reads as sunglasses; the same
-   shapes stroked read as very large eyes. */
-.mogger__dark { fill: var(--ink); stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
-/* The one hit of colour on him, and the whole gag. */
-.mogger__tie { fill: var(--acid); stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
-/* Paper-filled so it OCCLUDES the lower body and hind legs — a stroke-only
-   lectern would have the abdomen showing straight through it. */
-.mogger__stand { fill: var(--paper); stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
-.mogger__badge { fill: var(--acid); stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
+.mogger { display: block; width: 100%; max-width: 170px; aspect-ratio: 529 / 770; margin: 0 auto; }
+/* FILLED, not stroked. The art was traced from strokes, so each path is the
+   outline of a pen line — filling it reproduces the original weight variation,
+   which a uniform stroke-width could not. */
+.mogger__ink  { fill: var(--ink); }
+/* Under the ink, so the outlines stay crisp on top of the colour. */
+.mogger__acid { fill: var(--acid); }
 
 /* ── the ranks, shown before anyone has scanned ──────────── */
 .ranks {
@@ -577,6 +567,7 @@ code { font-family: var(--mono); }
 
 /* ── footer mark ─────────────────────────────────────────── */
 .foot__mark { display: inline-flex; align-items: center; gap: 0.45rem; }
+/* The footer sits on paper, not on the dark bar — so he stays ink. */
 .foot__mogger { width: 30px; height: 25px; display: block; flex: none; }
 
 /* Empty states: he is the thing you get instead of results. */

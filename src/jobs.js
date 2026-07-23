@@ -96,14 +96,10 @@ function emptyState() {
   const semantic = el.semantic?.checked;
   return `
     <div class="nothing">
-      <svg class="mogger nothing__mogger" viewBox="0 0 240 300" role="img"
-           aria-label="Line drawing of a cockroach in sunglasses and a tie at a lectern">
-        <g class="mogger__ink"><use href="#mogger" /></g>
-        <g class="mogger__tie"><use href="#moggerTie" /></g>
-        <g class="mogger__arms"><use href="#moggerArms" /></g>
-        <g class="mogger__dark"><use href="#moggerShades" /></g>
-        <g class="mogger__stand"><use href="#moggerLectern" /></g>
-        <g class="mogger__badge"><use href="#moggerBadge" /></g>
+      <svg class="mogger nothing__mogger" viewBox="0 0 529 770" role="img"
+           aria-label="Line drawing of a cockroach in aviator sunglasses and a tie, standing at a lectern">
+        <use class="mogger__acid" href="#moggerAcid" />
+        <use class="mogger__ink" href="#moggerInk" />
       </svg>
       <p class="nothing__head">Nothing survived that filter</p>
       <p class="nothing__sub">${
