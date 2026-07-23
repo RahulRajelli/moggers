@@ -311,6 +311,33 @@ async function handleFile(file) {
   }
 }
 
+/* Reset back to a clean slate. The file input must be cleared explicitly:
+   without it, re-picking the SAME file fires no `change` event (the value is
+   unchanged), so a user who fixed their PDF and re-selected it would see
+   nothing happen — which reads as a broken tool. */
+function resetScan() {
+  fileInput.value = "";
+  lastScanText = "";
+  results.hidden = true;
+  $("checks").innerHTML = "";
+  $("layer").innerHTML = "";
+  $("kwPanel").hidden = true;
+  dropLabel.textContent = "DROP YOUR PDF";
+  drop.classList.remove("is-busy");
+  document.dispatchEvent(new CustomEvent("moggers:cleared"));
+  drop.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+$("scanReset").addEventListener("click", resetScan);
+
+/* Hand the scanned text to the matcher and scroll there. Deliberately does NOT
+   send: the X-Ray section promises nothing leaves the device, so the one click
+   that transmits stays the matcher's own SEND button, in the section that
+   carries the warning. Prefilling is not sending. */
+$("matchFromScan").addEventListener("click", () => {
+  document.dispatchEvent(new CustomEvent("moggers:usescan", { detail: lastScanText }));
+});
+
 drop.addEventListener("click", () => fileInput.click());
 drop.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }

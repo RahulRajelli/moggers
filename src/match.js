@@ -130,6 +130,9 @@ export function initMatch(getScanText) {
 
   $("matchGo").addEventListener("click", run);
 
+  // Once edited by hand it is the user's text, not the scan's.
+  $("matchInput").addEventListener("input", (e) => { delete e.target.dataset.fromScan; });
+
   const keyInput = $("byokKey");
   const remember = $("byokRemember");
   if (keyInput) {
@@ -143,18 +146,40 @@ export function initMatch(getScanText) {
     remember?.addEventListener("change", persist);
   }
 
-  /* Offer to prefill from the X-Ray scan — the text is already in the page, so
-     this saves a copy-paste. It is still the user pressing send. */
+  /* Prefill from the X-Ray scan. Two entry points for the same action: the
+     button inside the results (discoverable right after a scan) and the one
+     here (for someone who scrolled down first). Neither sends — that stays the
+     SEND button below, in the section carrying the warning. */
   const fill = $("matchFill");
+
+  const prefill = (text) => {
+    if (!text) return;
+    $("matchInput").value = text.slice(0, 6000);
+    /* Marks this text as scan-derived so clearing the scan can remove it, while
+       leaving anything the user typed themselves untouched. */
+    $("matchInput").dataset.fromScan = "1";
+    if (fill) fill.hidden = true;
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+    /* Flash the section so it is obvious where the text landed and that a
+       second, deliberate click is still required. */
+    section.classList.add("is-filled");
+    setTimeout(() => section.classList.remove("is-filled"), 1200);
+    $("matchInput").focus();
+  };
+
   if (fill && typeof getScanText === "function") {
-    fill.addEventListener("click", () => {
-      const t = getScanText();
-      if (t) {
-        $("matchInput").value = t.slice(0, 6000);
-        fill.hidden = true;
-        $("matchInput").focus();
-      }
-    });
+    fill.addEventListener("click", () => prefill(getScanText()));
     document.addEventListener("moggers:scanned", () => { fill.hidden = false; });
   }
+  document.addEventListener("moggers:usescan", (e) => prefill(e.detail));
+
+  /* Clearing the scan clears anything taken from it, so a new PDF cannot be
+     matched against the previous resume's text. */
+  document.addEventListener("moggers:cleared", () => {
+    if (fill) fill.hidden = true;
+    if ($("matchInput").value && $("matchInput").dataset.fromScan === "1") {
+      $("matchInput").value = "";
+    }
+    $("matchOut").innerHTML = "";
+  });
 }

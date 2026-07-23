@@ -188,6 +188,32 @@ code { font-family: var(--mono); }
   padding: clamp(1rem, 3vw, 2rem) clamp(1rem, 4vw, 3rem) clamp(3rem, 6vw, 4.5rem);
   max-width: 1240px; margin: 0 auto;
 }
+/* Actions on a completed scan. Sits above the verdict so the two things a user
+   most wants next — match this, or scan another — are found without hunting. */
+.resultbar {
+  display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;
+  margin-bottom: 1.2rem;
+}
+.resultbar__match {
+  border: var(--rule); background: var(--acid); color: var(--ink);
+  box-shadow: var(--shadow-sm); font-family: var(--display);
+  font-size: 0.78rem; letter-spacing: 0.05em; padding: 0.7rem 1rem; cursor: pointer;
+  transition: transform .08s ease, box-shadow .08s ease;
+}
+.resultbar__match:hover { transform: translate(-2px, -2px); box-shadow: var(--shadow); }
+.resultbar__reset {
+  border: 2px solid var(--ink); background: none; color: var(--ink);
+  font-family: var(--mono); font-size: 0.74rem; padding: 0.55rem 0.7rem; cursor: pointer;
+}
+.resultbar__reset:hover { background: var(--ink); color: var(--paper); }
+.resultbar__match:focus-visible, .resultbar__reset:focus-visible {
+  outline: 3px solid var(--alert); outline-offset: 2px;
+}
+
+/* Brief flash so it is obvious where prefilled text landed — and that sending
+   is still a separate, deliberate click. */
+.matcher.is-filled textarea { background: var(--acid); }
+
 .verdict {
   display: flex; gap: clamp(1rem, 3vw, 2.4rem); align-items: center; flex-wrap: wrap;
   border: var(--rule); box-shadow: var(--shadow);
