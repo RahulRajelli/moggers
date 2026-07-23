@@ -546,6 +546,39 @@ code { font-family: var(--mono); }
 .mogger__stand { fill: var(--paper); stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
 .mogger__badge { fill: var(--acid); stroke: var(--ink); stroke-width: 1.8; stroke-linejoin: round; }
 
+/* ── the ranks, shown before anyone has scanned ──────────── */
+.ranks {
+  display: flex; flex-wrap: wrap; gap: 0.35rem;
+  list-style: none; margin: 1.1rem 0 0; padding: 0;
+}
+.ranks__item {
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em;
+  border: 2px solid var(--ink); padding: 0.22rem 0.45rem;
+  opacity: 0.45; white-space: nowrap;
+}
+/* Only the ends carry colour. Grading all five would turn a scale into
+   decoration and cost the extremes their meaning. */
+.ranks__item--bad  { opacity: 1; background: var(--alert); color: var(--paper); border-color: var(--alert); }
+.ranks__item--good { opacity: 1; background: var(--acid); }
+
+/* ── the specimen plate (explainer card) ─────────────────── */
+.card--mogger { display: flex; flex-direction: column; }
+.plate {
+  margin: 0 0 0.9rem; border: 2px solid var(--ink); background: var(--paper);
+}
+.plate .mogger { max-width: 128px; padding: 0.7rem 0.5rem 0.2rem; }
+.plate figcaption {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 0.5rem; flex-wrap: wrap;
+  border-top: 2px solid var(--ink); padding: 0.35rem 0.5rem;
+  font-size: 0.56rem; font-weight: 700; letter-spacing: 0.12em;
+}
+.plate__sub { font-weight: 400; opacity: 0.45; }
+
+/* ── footer mark ─────────────────────────────────────────── */
+.foot__mark { display: inline-flex; align-items: center; gap: 0.45rem; }
+.foot__mogger { width: 30px; height: 25px; display: block; flex: none; }
+
 /* Empty states: he is the thing you get instead of results. */
 .nothing { text-align: center; padding: 2rem 1rem 2.5rem; }
 .nothing__mogger { max-width: 116px; opacity: 0.85; }

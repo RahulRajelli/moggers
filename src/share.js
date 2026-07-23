@@ -201,7 +201,12 @@ function drawMogger(ctx, x, y, scale) {
      with paper so it OCCLUDES the abdomen and hind legs, which only works if
      it goes down after them. */
   const layers = [
-    { sel: "#mogger path", stroke: INK, width: heavy },
+    /* #moggerHead is a separate group so the footer mark can use it alone, and
+       #mogger pulls it in with <use>. A <use> is not a <path>, so querying only
+       "#mogger path" would silently draw a headless cockroach on the card —
+       selecting both is what keeps the two in step. Document order puts the
+       head first, which is also the order it has to be drawn in. */
+    { sel: "#moggerHead path, #mogger path", stroke: INK, width: heavy },
     { sel: "#moggerTie path", fill: ACID, stroke: INK, width: heavy },
     { sel: "#moggerArms path", stroke: INK, width: heavy * 1.3 },
     { sel: "#moggerShades path", fill: INK, stroke: INK, width: heavy * 0.6 },

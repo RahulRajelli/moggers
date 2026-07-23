@@ -55,6 +55,18 @@
       <p class="sample">
         <button type="button" id="sample">Scan a deliberately broken sample →</button>
       </p>
+
+      <!-- The ranks, before anyone has scanned anything. Two jobs: it tells you
+           what you are about to be handed, and it is the only place the site
+           says its own name out loud. The scale runs worst-first so the eye
+           lands on the one nobody wants. -->
+      <ul class="ranks" aria-label="How the five checks are scored">
+        <li class="ranks__item ranks__item--bad">ABSOLUTELY MOGGED</li>
+        <li class="ranks__item">GETTING MOGGED</li>
+        <li class="ranks__item">MID</li>
+        <li class="ranks__item">MOGGING</li>
+        <li class="ranks__item ranks__item--good">UNMOGGABLE</li>
+      </ul>
     </div>
 
     <!-- THE SPECIMEN.
@@ -267,12 +279,46 @@
         <h3>The checker never asks who you are</h3>
         <p>Your browser parses the file. No upload, no account, no storage — close the tab and it is gone. Open the network panel and check. Signing in is only for saving roles.</p>
       </article>
+
+      <!-- THE MOGGER, on the page you actually land on. He was previously only
+           reachable via an empty search or a 404, which is to say almost never.
+           Framed as a plate so he reads as the second drawing in the same set
+           as THE SPECIMEN rather than as clip art someone pasted in. -->
+      <article class="card card--mogger">
+        <figure class="plate">
+          <svg class="mogger" viewBox="0 0 240 300" role="img"
+               aria-label="Line drawing of a cockroach in sunglasses and a tie, standing at a lectern">
+            <g class="mogger__ink"><use href="#mogger" /></g>
+            <g class="mogger__tie"><use href="#moggerTie" /></g>
+            <g class="mogger__arms"><use href="#moggerArms" /></g>
+            <g class="mogger__dark"><use href="#moggerShades" /></g>
+            <g class="mogger__stand"><use href="#moggerLectern" /></g>
+            <g class="mogger__badge"><use href="#moggerBadge" /></g>
+          </svg>
+          <figcaption>
+            <span>SPECIMEN&nbsp;B</span>
+            <span class="plate__sub">blattodea executivus</span>
+          </figcaption>
+        </figure>
+        <h3>Nothing filters him out</h3>
+        <p>He has survived every extinction event, three recessions and one
+          rebrand. Your resume needs to be about as hard to kill. That is the
+          entire product.</p>
+      </article>
     </div>
   </section>
 </main>
 
 <footer class="foot">
-  <span>MOGGERS</span>
+  <span class="foot__mark">
+    <!-- Head only. The full figure is illegible below about 90px, and a mark
+         has to work at 30. -->
+    <svg class="foot__mogger" viewBox="60 0 120 100" aria-hidden="true" focusable="false">
+      <g class="mogger__ink"><use href="#moggerHead" /></g>
+      <g class="mogger__dark"><use href="#moggerShades" /></g>
+    </svg>
+    MOGGERS
+  </span>
   <span class="foot__mid">
     built by <a href="https://robosimtools.com">robosimtools</a> ·
     <a href="/privacy.html">Privacy</a> · <a href="/terms.html">Terms</a>
@@ -293,12 +339,17 @@
      launch video, where bytes on this page are not a cost. -->
 <svg class="sprite" aria-hidden="true" focusable="false">
   <defs>
-    <g id="mogger">
-      <!-- antennae, swept up and out -->
+    <!-- Head alone, so the footer mark has something legible at 30px. Kept as
+         its own group rather than a cropped viewBox of the full figure, because
+         the full figure's legs and lectern would still be in the DOM and still
+         be read out by assistive tech. -->
+    <g id="moggerHead">
       <path d="M107 42 C90 16 60 2 30 0" />
       <path d="M133 42 C150 16 180 2 210 0" />
-      <!-- head: round enough to carry the aviators, which are the whole tell -->
       <path d="M120 28 C100 28 88 41 88 58 C88 75 102 86 120 86 C138 86 152 75 152 58 C152 41 140 28 120 28 Z" />
+    </g>
+    <g id="mogger">
+      <use href="#moggerHead" />
       <!-- pronotum -->
       <path d="M120 82 C94 82 76 94 76 112 C76 128 96 136 120 136 C144 136 164 128 164 112 C164 94 146 82 120 82 Z" />
       <!-- abdomen, lower half hidden by the lectern when it is drawn -->
