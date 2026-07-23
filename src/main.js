@@ -238,6 +238,26 @@ function renderChecks(checks) {
 let lastVerdict = null;
 let lastScanLigatures = [];
 
+/* THE RANK.
+ *
+ * The site is called MOGGERS and, until this existed, never once used the word.
+ * The score is the single moment anyone might screenshot, and a bare "3/5" is a
+ * result — a RANK is a thing people post. That is the entire reason this is
+ * here, and it is why the rank is the biggest element on the share card too.
+ *
+ * The joke is confined to the rank and its one-liner. Every check title, body
+ * and FIX below stays factual: the tool's whole claim is that it tells you
+ * something true that the scoring tools do not, and that survives exactly as
+ * long as the diagnosis is sober. Rank loud, diagnosis straight. */
+const TIERS = [
+  { min: 5, name: "UNMOGGABLE",        line: "Nothing here filters you out. Go be good at the job instead." },
+  { min: 4, name: "MOGGING",           line: "One flaw between you and a clean parse." },
+  { min: 3, name: "MID",               line: "Readable, and quietly leaking reach on every application." },
+  { min: 2, name: "GETTING MOGGED",    line: "Half of this never reaches a human being." },
+  { min: 0, name: "ABSOLUTELY MOGGED", line: "The parser is eating this alive." },
+];
+const tierFor = (passed) => TIERS.find((t) => passed >= t.min) ?? TIERS[TIERS.length - 1];
+
 function renderVerdict(checks) {
   const passed = checks.filter((c) => c.state === "pass").length;
   const failed = checks.filter((c) => c.state === "fail").length;
@@ -245,16 +265,29 @@ function renderVerdict(checks) {
   el.classList.toggle("is-fail", failed > 0);
   el.classList.toggle("is-pass", passed === checks.length);
   $("verdictNum").textContent = passed;
+
+  const tier = tierFor(passed);
+  const stamp = $("verdictTier");
+  stamp.textContent = tier.name;
+  stamp.hidden = false;
+  /* Only the bottom two ranks go red. A stamp that screams on a 4/5 is the
+     same lie the scoring tools tell, in the other direction. */
+  stamp.classList.toggle("is-bad", passed <= 2);
+  stamp.classList.toggle("is-good", passed === checks.length);
+
   $("verdictTitle").textContent = failed
     ? "THE PARSER IS DROPPING YOU"
     : passed === checks.length
     ? "CLEAN — THE PARSER READS EVERYTHING"
     : "READABLE, WITH WARNINGS";
+
+  /* Rank one-liner first, then the factual consequence. The joke earns
+     attention; the sentence after it is the part that makes someone act. */
   $("verdictSub").textContent = failed
-    ? `${failed} check${failed > 1 ? "s" : ""} failed. Fix these before you send this resume anywhere else — every application until then is being filtered on arrival.`
+    ? `${tier.line} ${failed} check${failed > 1 ? "s" : ""} failed — every application you send until they are fixed is being filtered on arrival.`
     : passed === checks.length
-    ? "Every keyword on this resume is machine-readable. Now go make the content worth reading."
-    : "Nothing is silently broken, but the warnings below cost you reach.";
+    ? `${tier.line} Every keyword on this resume is machine-readable.`
+    : `${tier.line} Nothing is silently broken, but the warnings below cost you reach.`;
 
   /* Assembled for the share card. Counts and verdict only — plus the ligature
      GLYPHS, which are characters rather than any word from the document. */
@@ -266,6 +299,7 @@ function renderVerdict(checks) {
     passed,
     total: checks.length,
     failed,
+    tier: tier.name,
     title: $("verdictTitle").textContent,
     ligatures,
     worst: ligatures
@@ -308,12 +342,12 @@ function renderKeywords(text) {
 async function handleFile(file) {
   if (!file) return;
   if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-    dropLabel.textContent = "THAT'S NOT A PDF";
+    dropLabel.textContent = "THAT IS NOT A PDF";
     return;
   }
 
   drop.classList.add("is-busy");
-  dropLabel.textContent = "READING…";
+  dropLabel.textContent = "READING YOU…";
 
   try {
     const { text, pageCount } = await extractPdf(await file.arrayBuffer());
@@ -332,7 +366,9 @@ async function handleFile(file) {
     results.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
     console.error(err);
-    dropLabel.textContent = "COULDN'T READ THAT FILE";
+    /* The joke is also the product claim: if this parser cannot open it,
+       neither can theirs. */
+    dropLabel.textContent = "COULDN'T READ IT. NEITHER CAN THEY.";
   } finally {
     drop.classList.remove("is-busy");
   }

@@ -107,32 +107,59 @@ export function drawCard(result) {
   ctx.fillText(`of ${result.total} checks`, boxX + boxW / 2, boxY + 232);
   ctx.textAlign = "left";
 
-  // ── verdict ──
+  // ── the rank, stamped ──
+  /* THE HEADLINE, not the verdict sentence. A card whose biggest words are
+     "THE PARSER IS DROPPING YOU" is a diagnosis; a card whose biggest word is
+     ABSOLUTELY MOGGED is a thing someone posts. The sober line goes underneath,
+     where it does the actual work once the image has earned a look. */
   const textX = boxX + boxW + 56;
-  const textW = W - textX - 60;
+  const textW = W - textX - 240; // leaves the right margin for THE MOGGER
 
-  ctx.fillStyle = clean ? INK : ALERT;
-  ctx.font = `54px ${DISPLAY}`;
-  const lines = wrap(ctx, result.title.toUpperCase(), textW);
-  lines.slice(0, 3).forEach((line, i) => {
-    ctx.fillText(line, textX, boxY + 44 + i * 62);
-  });
+  const tier = (result.tier || "").toUpperCase();
+  if (tier) {
+    ctx.font = `76px ${DISPLAY}`;
+    const tw = Math.min(ctx.measureText(tier).width, textW);
+    const th = 96;
+    const tx = textX;
+    const ty = boxY + 6;
+
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.rotate((-1.6 * Math.PI) / 180); // same tilt as the stamp on the page
+    ctx.fillStyle = clean ? ACID : ALERT;
+    ctx.fillRect(0, 0, tw + 36, th);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 6;
+    ctx.strokeRect(0, 0, tw + 36, th);
+    ctx.fillStyle = clean ? INK : PAPER;
+    ctx.textBaseline = "middle";
+    roundedText(ctx, tier, 18, th / 2 + 4, textW);
+    ctx.restore();
+  }
 
   ctx.fillStyle = INK;
-  ctx.font = `26px ${MONO}`;
-  const detailY = boxY + 44 + Math.min(lines.length, 3) * 62 + 34;
+  ctx.font = `34px ${DISPLAY}`;
+  const titleY = boxY + 150;
+  wrap(ctx, result.title.toUpperCase(), textW).slice(0, 2).forEach((line, i) => {
+    ctx.fillText(line, textX, titleY + i * 42);
+  });
 
+  const detailY = titleY + 96;
   if (result.ligatures > 0) {
     /* The ligature glyphs themselves are the whole demonstration: they look
        like normal words and are not. Rendered large, in alert red, because on
        a shared image they are the thing that makes someone check their own. */
-    ctx.fillText(`${result.ligatures} ligature glyphs the parser cannot search:`, textX, detailY);
-    ctx.font = `72px ${DISPLAY}`;
+    ctx.font = `24px ${MONO}`;
+    ctx.fillText(`${result.ligatures} ligature glyphs it cannot search:`, textX, detailY);
+    ctx.font = `64px ${DISPLAY}`;
     ctx.fillStyle = ALERT;
-    roundedText(ctx, result.worst || "ﬁ ﬂ ﬀ", textX, detailY + 62, textW);
+    roundedText(ctx, result.worst || "ﬁ ﬂ ﬀ", textX, detailY + 56, textW);
   } else if (result.worst) {
+    ctx.font = `24px ${MONO}`;
     roundedText(ctx, result.worst, textX, detailY, textW);
   }
+
+  drawMogger(ctx, W - 215, 190, 0.62);
 
   // ── footer ──
   ctx.fillStyle = INK;
@@ -145,6 +172,57 @@ export function drawCard(result) {
   ctx.textAlign = "left";
 
   return canvas;
+}
+
+/* THE MOGGER, on canvas.
+ *
+ * Read straight off the inline sprite in index.html rather than duplicated as
+ * path data here. Two copies of a drawing is two drawings, and the one nobody
+ * looks at is the one that silently stops matching — which for a shareable
+ * image is the copy that gets seen most. Every node in the sprite is a <path>
+ * for exactly this reason; an <ellipse> would need its own branch.
+ *
+ * No sprite (any page that is not index.html) simply means no mascot.
+ */
+function drawMogger(ctx, x, y, scale) {
+  if (!document.querySelector("#mogger path")) return;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  /* Stroke widths are in pre-transform units, so a literal 1.8 would come out
+     under a pixel on the card and vanish. Solve for the width we want to see. */
+  const heavy = 2.4 / scale;
+
+  /* Draw order is load-bearing, exactly as in the SVG: the lectern is filled
+     with paper so it OCCLUDES the abdomen and hind legs, which only works if
+     it goes down after them. */
+  const layers = [
+    { sel: "#mogger path", stroke: INK, width: heavy },
+    { sel: "#moggerTie path", fill: ACID, stroke: INK, width: heavy },
+    { sel: "#moggerArms path", stroke: INK, width: heavy * 1.3 },
+    { sel: "#moggerShades path", fill: INK, stroke: INK, width: heavy * 0.6 },
+    { sel: "#moggerLectern path", fill: PAPER, stroke: INK, width: heavy },
+    { sel: "#moggerBadge path", fill: ACID, stroke: INK, width: heavy },
+  ];
+
+  for (const layer of layers) {
+    for (const p of document.querySelectorAll(layer.sel)) {
+      const path = new Path2D(p.getAttribute("d"));
+      const construction = p.classList.contains("cx");
+      if (layer.fill && !construction) {
+        ctx.fillStyle = layer.fill;
+        ctx.fill(path);
+      }
+      ctx.strokeStyle = construction ? "rgba(11,11,11,0.3)" : layer.stroke;
+      ctx.lineWidth = construction ? heavy * 0.4 : layer.width;
+      ctx.stroke(path);
+    }
+  }
+  ctx.restore();
 }
 
 function wrap(ctx, text, maxWidth) {
@@ -187,7 +265,9 @@ export async function shareCard(result) {
     try {
       await navigator.share({
         files: [file],
-        text: `${result.passed}/${result.total} ATS checks survived. Check yours at moggers.in`,
+        /* Rank first here too — this string is the post when someone shares to
+           a text-first app that ignores the image. */
+        text: `${result.tier}. ${result.passed}/${result.total} ATS checks survived — check yours at moggers.in`,
       });
       return "shared";
     } catch (err) {

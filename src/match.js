@@ -112,10 +112,14 @@ async function run() {
          someone to add keywords would send them off to do useless work. */
       out.innerHTML = `
         <div class="nothing">
-          <svg class="mogger nothing__mogger" viewBox="0 0 240 320" role="img"
-               aria-label="Line drawing of a cockroach wearing a tie">
+          <svg class="mogger nothing__mogger" viewBox="0 0 240 300" role="img"
+               aria-label="Line drawing of a cockroach in sunglasses and a tie at a lectern">
             <g class="mogger__ink"><use href="#mogger" /></g>
             <g class="mogger__tie"><use href="#moggerTie" /></g>
+            <g class="mogger__arms"><use href="#moggerArms" /></g>
+            <g class="mogger__dark"><use href="#moggerShades" /></g>
+            <g class="mogger__stand"><use href="#moggerLectern" /></g>
+            <g class="mogger__badge"><use href="#moggerBadge" /></g>
           </svg>
           <p class="nothing__head">Nothing close enough to show you</p>
           <p class="nothing__sub">This matched on meaning, not keywords — so adding
