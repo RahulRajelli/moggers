@@ -328,9 +328,28 @@ Verified against the live feeds: 19/19 boards responded, 5,591 postings fetched,
 npm run build
 npx wrangler d1 execute moggers --local --file=schema.sql
 echo SYNC_TOKEN=local-dev-only > .dev.vars
-npx wrangler dev --port 4341 --local
-curl "http://127.0.0.1:4341/api/sync?token=local-dev-only"
+npx wrangler dev --port 4341
+curl -X POST -H "x-sync-token: local-dev-only" "http://127.0.0.1:4341/api/sync?boards=figureai"
 ```
+
+**Do NOT add `--local`.** It forces every binding local and then *refuses* the
+ones marked `remote = true`, so `env.AI` throws `Binding AI needs to be run
+remotely` on first use. The damage is uneven and that is what makes it
+confusing: semantic search catches the failure and silently degrades to
+keyword, so the Meaning toggle merely returns the wrong results, while the
+matcher 500s outright. Plain `wrangler dev` is local for D1, Durable Objects,
+the rate limiter and assets, and remote only for Workers AI and Vectorize —
+which is exactly what you want.
+
+The startup banner is the check. Expect:
+
+```
+env.VECTORIZE (moggers-jobs)   Vectorize Index    remote
+env.AI                         AI                 remote
+```
+
+Anything saying `local` on those two means the matcher and the Meaning toggle
+will not work, no matter what the code does.
 
 `wrangler dev` does **not** pick up a rebuilt `dist/` — restart it after
 `npm run build` or it serves a stale asset manifest and the dynamic chunks 404.
@@ -484,13 +503,15 @@ agent over RPC rather than the browser calling it over WebSocket.
 
 ### Testing it locally
 
-Durable Objects and their alarms *do* work in `wrangler dev --local`, unlike the
-rate limiter and the CPU ceiling. Workers AI and Vectorize do not, so a semantic
-watch falls back to keyword there — which is itself worth exercising.
+Durable Objects and their alarms *do* work in `wrangler dev`, unlike the rate
+limiter and the CPU ceiling.
 
 ```
-npx wrangler dev --port 4342 --local
+npx wrangler dev --port 4342
 ```
+
+No `--local` — see the warning under "Local development" above. With it, a
+semantic watch falls back to keyword and the matcher fails outright.
 
 Forge a session (see above), then drive the API with `curl`. The full local
 check that proved this build: create a watch (expect `fresh: []` and a non-zero

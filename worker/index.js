@@ -407,7 +407,18 @@ export default {
              key from the message. Everything else stays generic. */
           const msg = String(err?.message || "");
           if (geminiKey) return json({ error: msg.slice(0, 200) }, 400);
-          throw err;
+
+          /* Everything this endpoint can fail on downstream of the guards above
+             is a backend being down — Workers AI or Vectorize — so say that
+             rather than falling through to a bare "internal error" 500. The
+             request was fine; the service was not, and the user's next move
+             (wait, or supply their own key) differs completely from the one a
+             500 implies. Surfaced verbatim in the logs, never to the client. */
+          console.error("match failed", err);
+          return json({
+            error: "the matching service is unavailable right now",
+            backend_down: true, // the UI offers BYOK on this, same as a spent budget
+          }, 503);
         }
         if (result.error) return json(result, 400);
         // Charge only our budget, only on success, and never for BYOK runs.

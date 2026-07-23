@@ -266,9 +266,7 @@ export class MoggerAgent extends Agent {
         seen: mergeSeen(jobs.map((j) => j.id), s.seen),
         fresh: mergeFresh(arrivals.map((j) => watchEntry(j, stamp)), s.fresh),
         lastRun: stamp,
-        lastError: degraded
-          ? "checked by keyword — the daily AI budget is spent"
-          : null,
+        lastError: degraded,
         runs: s.runs + 1,
       });
     } catch (err) {
@@ -290,11 +288,11 @@ export class MoggerAgent extends Agent {
      run finds none. */
   async #runSearch(search) {
     let mode = search.mode;
-    let degraded = false;
+    let spent = false;
 
     if (mode === "semantic" && !(await checkBudget(this.env.DB, NEURONS_PER_WATCH))) {
       mode = "keyword";
-      degraded = true;
+      spent = true;
     }
 
     const result = await searchJobs(this.env, { ...search, mode, limit: WATCH_LIMIT });
@@ -304,6 +302,18 @@ export class MoggerAgent extends Agent {
        reports the mode it actually used — billing on the way in would have
        spent budget on calls that never happened. */
     if (result.mode === "semantic") await chargeBudget(this.env.DB, NEURONS_PER_WATCH);
+
+    /* A watch saved "by meaning" that quietly ran as a keyword search finds
+       different roles, and searchJobs falls back without raising anything. Say
+       which of the two reasons it was: one resolves itself at midnight, the
+       other is a backend that is down. Silence here would look like a watch
+       that simply never matches anything. */
+    const degraded =
+      search.mode === "semantic" && result.mode !== "semantic"
+        ? spent
+          ? "checked by keyword — the daily AI budget is spent"
+          : "checked by keyword — semantic search was unavailable"
+        : null;
 
     return { jobs: result.jobs || [], degraded };
   }

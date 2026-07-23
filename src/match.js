@@ -92,9 +92,11 @@ async function run() {
     const data = await res.json();
 
     if (!res.ok) {
-      /* When OUR budget is spent, point at the fallback rather than just
-         saying no — the user can keep going on their own free quota. */
-      const extra = data.budget_exhausted
+      /* When OUR budget is spent — or the model backend is down — point at the
+         fallback rather than just saying no. The user can keep going on their
+         own free quota either way, and being told "unavailable" with no way
+         forward is what makes a working feature feel broken. */
+      const extra = data.budget_exhausted || data.backend_down
         ? ` <button type="button" class="matchout__byok" id="matchOpenByok">use your own Gemini key →</button>`
         : "";
       out.innerHTML = `<p class="matchout__msg">${escapeHtml(data.error || "matching failed")}${extra}</p>`;

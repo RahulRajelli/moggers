@@ -67,6 +67,12 @@ run_worker_first = [
 binding = "AI"
 # `remote` only affects `wrangler dev`: there is no local emulation of Workers
 # AI or Vectorize, so dev must call the real services. Production is unaffected.
+#
+# THE `--local` FLAG OVERRIDES THIS AND BREAKS IT. `wrangler dev --local` forces
+# every binding local and then REFUSES the ones marked remote — the request dies
+# with "Binding AI needs to be run remotely". Semantic search silently degrades
+# to keyword (it catches and falls back) but the matcher 500s. Run plain
+# `wrangler dev`, which is local for D1/DO/assets and remote only for these two.
 remote = true
 
 [[vectorize]]
