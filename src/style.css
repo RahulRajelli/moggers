@@ -439,6 +439,20 @@ code { font-family: var(--mono); }
 }
 .bar__signin:hover { background: var(--acid); color: var(--ink); }
 
+/* The watch, surfaced at the top of the page. Quiet by default — it is a status
+   readout, not a call to action — and only goes acid when roles are waiting,
+   which is the one state worth interrupting anyone for. */
+.bar__watch {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em;
+  border: 2px solid currentColor; padding: 0.24rem 0.55rem;
+  text-decoration: none; white-space: nowrap; opacity: 0.6;
+  max-width: 22ch; overflow: hidden; text-overflow: ellipsis;
+}
+.bar__watch:hover { opacity: 1; }
+.bar__watch.is-new {
+  opacity: 1; background: var(--acid); color: var(--ink); border-color: var(--acid);
+}
+
 .signin { max-width: 46ch; margin: 0 auto; padding: clamp(2rem, 6vw, 4rem) clamp(1rem, 4vw, 3rem) 4rem; }
 .signin__title { font-size: clamp(2.4rem, 9vw, 4.5rem); line-height: 0.88; text-transform: uppercase; }
 .signin__title::after { content: "."; color: var(--acid); -webkit-text-stroke: 1px var(--ink); }
@@ -502,6 +516,16 @@ code { font-family: var(--mono); }
 }
 .watch__state { flex: 1 1 14rem; min-width: 0; font-size: 0.72rem; opacity: 0.65; }
 .watch__state.is-warn { opacity: 1; color: var(--alert); font-weight: 700; }
+/* A check that finds nothing changes nothing on screen, so the wait and the
+   result both have to be shown or the button reads as dead. */
+.watch__state.is-busy { opacity: 1; font-weight: 700; animation: watch-pulse 1s ease-in-out infinite; }
+.watch__state.is-flash { opacity: 1; font-weight: 700; background: var(--acid); box-shadow: 0 0 0 4px var(--acid); }
+@keyframes watch-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+/* Respect the same preference the specimen does — the text still reads as
+   emphasised, it just stops blinking. */
+@media (prefers-reduced-motion: reduce) {
+  .watch__state.is-busy { animation: none; }
+}
 .watch__mini {
   border: none; background: none; padding: 0; cursor: pointer;
   font-family: var(--mono); font-size: 0.7rem; text-decoration: underline;

@@ -85,14 +85,27 @@ export class MoggerAgent extends Agent {
        never fires — or fires twice. Anything other than 1 while watching is a
        bug, and the UI says so rather than leaving it to a dashboard. */
     let armed = 0;
+    let nextRun = null;
     try {
-      armed = (await this.listSchedules()).length;
+      const schedules = await this.listSchedules();
+      armed = schedules.length;
+
+      /* The REAL next-alarm time, read from the schedule rather than computed
+         as lastRun + interval. Those two diverge the moment anyone presses
+         "check now": a manual run updates lastRun but does not move the alarm,
+         so the arithmetic version would promise a check that is not coming. */
+      const soonest = schedules.map((s) => s.time).filter(Boolean).sort((a, b) => a - b)[0];
+      if (soonest) {
+        // Seconds since epoch, but tolerate milliseconds rather than render 1970.
+        nextRun = new Date(soonest < 1e12 ? soonest * 1000 : soonest).toISOString();
+      }
     } catch (err) {
       console.error("listSchedules failed", err);
     }
 
     return {
       armed,
+      next_run: nextRun,
       watching: Boolean(s.search),
       search: s.search,
       summary: s.search ? describeWatch(s.search) : "",

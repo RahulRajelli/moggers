@@ -54,6 +54,9 @@ function matchesCurrent() {
 
 function render() {
   if (!el) return;
+  /* First, not last: the two branches below return early, and the badge has to
+     be cleared on exactly those paths — signed out, or no longer watching. */
+  renderBadge();
 
   if (!isSignedIn()) {
     el.go.textContent = "◉ WATCH THIS SEARCH";
@@ -80,7 +83,6 @@ function render() {
   el.go.textContent = matchesCurrent() ? "◉ WATCHING" : "◉ UPDATE WATCH TO THIS";
   el.go.classList.toggle("is-on", matchesCurrent());
 
-  const when = state.last_run ? relative(state.last_run) : "not yet";
   /* `armed` is the number of live alarms. Watching with none means the
      schedule did not survive — every other field would still read "watching"
      while nothing ever fired again, which is the failure this whole feature is
@@ -93,7 +95,7 @@ function render() {
     ? `${state.summary} · schedule is not running — press check to restart it`
     : state.last_error
     ? `${state.summary} · ${state.last_error}`
-    : `${state.summary} · checked ${when}`;
+    : `${state.summary} · ${checkedLine()}`;
   el.state.classList.toggle(
     "is-warn",
     Boolean(state.last_error) || state.dormant || unarmed
@@ -107,21 +109,80 @@ function render() {
   }
 }
 
-function relative(iso) {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (Number.isNaN(mins)) return "";
-  if (mins < 60) return "just now";
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+/* Wall-clock, not "just now".
+ *
+ * Pressing *check now* twice in a row produced two identical "checked just
+ * now" lines, so the only feedback that anything had happened was that nothing
+ * changed. A precise timestamp moves on every single check, which is the whole
+ * point of putting it there. */
+const clock = (iso, withSeconds = false) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(withSeconds ? { second: "2-digit" } : {}),
+    hour12: false,
+  });
+};
+
+function checkedLine() {
+  if (!state.last_run) return "not checked yet";
+  const parts = [`checked ${clock(state.last_run, true)}`];
+  /* The real alarm time from the schedule, not lastRun + interval — a manual
+     check moves one and not the other. Only shown when it is genuinely in the
+     future, so a lagging alarm never renders as a time already past. */
+  if (state.next_run && new Date(state.next_run).getTime() > Date.now()) {
+    parts.push(`next ${clock(state.next_run)}`);
+  }
+  return parts.join(" · ");
+}
+
+/* The watch is at the bottom of a long page, so the one thing worth knowing —
+   that roles are waiting — has to be visible from the top. Doubles as the
+   answer to "what am I even watching?" without scrolling to find out. */
+function renderBadge() {
+  const badge = document.getElementById("barWatch");
+  if (!badge) return;
+
+  const watching = isSignedIn() && Boolean(state?.watching);
+  badge.hidden = !watching;
+  if (!watching) return;
+
+  /* Count FIRST when there is one. The chip ellipsis-truncates on a narrow
+     screen, and trailing the count meant the only part worth reading was the
+     part that got cut. */
+  const n = state.fresh?.length || 0;
+  badge.textContent = n ? `◉ ${n} NEW · ${state.summary}` : `◉ ${state.summary}`;
+  badge.classList.toggle("is-new", n > 0);
+  badge.title = n
+    ? `${n} new role${n > 1 ? "s" : ""} since you last looked`
+    : `Watching · ${checkedLine()}`;
 }
 
 /* Every mutation returns the full snapshot, so there is one render path and no
-   chance of the button and the strip disagreeing about what is saved. */
-async function call(path, options = {}) {
+   chance of the button and the strip disagreeing about what is saved.
+ *
+ * `pending` is not decoration. A check that finds nothing changes NOTHING on
+ * screen — same button, same list, and previously the same "checked just now" —
+ * so the honest outcome and the broken one were indistinguishable. The request
+ * takes a second or two against 19 boards' worth of index, and the UI has to
+ * account for that time and then say what came of it. */
+async function call(path, { pending = null, ...options } = {}) {
   if (busy) return;
   busy = true;
   el.go.disabled = true;
+  el.check.disabled = true;
+
+  clearTimeout(flash);
+  const before = state?.fresh?.length || 0;
+
+  if (pending) {
+    el.state.textContent = pending;
+    el.state.classList.remove("is-warn");
+    el.state.classList.add("is-busy");
+  }
+
   try {
     const res = await fetch(path, {
       headers: { "content-type": "application/json" },
@@ -135,13 +196,39 @@ async function call(path, options = {}) {
     }
     state = data;
     render();
+
+    /* Report the result of a manual check explicitly. "Nothing new" is a real
+       answer and the commonest one — the boards only move every 6 hours — so
+       leaving it silent is what made the button feel dead. */
+    if (pending) {
+      const found = (state.fresh?.length || 0) - before;
+      announce(
+        found > 0
+          ? `${found} new role${found > 1 ? "s" : ""} found`
+          : `no new roles · ${checkedLine()}`
+      );
+    }
   } catch {
     el.state.textContent = "could not reach the watcher — try again in a moment";
     el.state.classList.add("is-warn");
   } finally {
     busy = false;
     el.go.disabled = false;
+    el.check.disabled = false;
+    el.state.classList.remove("is-busy");
   }
+}
+
+/* Hold an outcome long enough to be read, then fall back to the standing state
+   line. Not a toast: it belongs in the place the user was already looking. */
+let flash;
+function announce(message) {
+  el.state.textContent = message;
+  el.state.classList.add("is-flash");
+  flash = setTimeout(() => {
+    el.state.classList.remove("is-flash");
+    render();
+  }, 4000);
 }
 
 function save() {
@@ -181,7 +268,9 @@ export async function initWatch() {
      re-baselines when the search itself changed — so changing frequency does
      not throw away what the user came back to read. */
   el.every.addEventListener("change", () => state?.watching && save());
-  el.check.addEventListener("click", () => call("/api/watch/check", { method: "POST" }));
+  el.check.addEventListener("click", () =>
+    call("/api/watch/check", { method: "POST", pending: "checking the boards…" })
+  );
   el.stop.addEventListener("click", () => call("/api/watch", { method: "DELETE" }));
   el.ack.addEventListener("click", () => call("/api/watch/ack", { method: "POST" }));
 
